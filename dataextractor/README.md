@@ -13,7 +13,7 @@ function insert(object, callback){
 ```
 
 ```javascript
-function getNextBlockNumber(){
+function getLastBlock(){
     //check db for highest block number inserted
-    //return blocknumber + 1 or 0 if nothing is inserted.
+    //return blocknumber or -1 if nothing is inserted yet.
 }
