@@ -23,7 +23,6 @@
   },
   "homepage": "https://github.com/steffen93/p2b2#readme",
   "dependencies": {
-    "mongodb": "^2.2.28",
     "web3": "^0.19.0"
   }
 }

@@ -1,0 +1,24 @@
+{
+  "name": "p2b2-mongodb-connector",
+  "version": "0.0.1",
+  "description": "Connector to send data to from the p2b2 data extractor",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/steffen93/p2b2.git"
+  },
+  "keywords": [
+    "blockchain",
+    "ethereum",
+    "data",
+    "extraction"
+  ],
+  "author": "Steffen Härtlein",
+  "license": "MIT",
+  "dependencies": {
+    "mongodb": "^2.2.28"
+  }
+}
