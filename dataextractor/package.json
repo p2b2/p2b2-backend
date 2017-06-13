@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/steffen93/p2b2#readme",
   "dependencies": {
+    "es6-promise": "^4.1.0",
     "web3": "^0.19.0"
   }
 }

@@ -1,5 +1,6 @@
 'use strict';
 
+var Promise = require("es6-promise").Promise
 var mongoclient = require("mongodb").MongoClient
 var mongoDBURL = "mongodb://localhost:27017/p2b2"
 var mongoDatabase
@@ -10,23 +11,36 @@ var isFunction = function(f){
 
 var MongoDBConnector = function(){};
 
-MongoDBConnector.prototype.connect = function(cb) {
-	mongoclient.connect(mongoDBURL, (err, db) => {
-		if(err){
-			cb(err)
-		} else {
-			mongoDatabase = db
-			console.log("Connected successfully to mongodb.")
-			cb(null, true)
-		}
+MongoDBConnector.prototype.connect = function() {
+	return new Promise((resolve, reject) => {
+		mongoclient.connect(mongoDBURL, (err, db) => {
+			if(err){
+				reject(err)
+			} else {
+				mongoDatabase = db
+				console.log("Connected successfully to mongodb.")
+				resolve(true)
+			}
+		})
 	})
+}
+
+MongoDBConnector.prototype.disconnect = function() {
+	mongoDatabase.close()
 }
 
 MongoDBConnector.prototype.getLastBlock = function(callback){
 	if(!isFunction(callback)){
 		throw new Error("missing callback function parameter")
 	} else {
-		callback(null, -1);
+		mongoDatabase.collection('blocks').find({}).sort({number: -1}).limit(1).next((err, doc) => {
+			console.log(doc)
+			if(err){
+				callback(null, -1)
+			} else {
+				callback(null, doc.number)
+			}
+		})
 	}
 }
 

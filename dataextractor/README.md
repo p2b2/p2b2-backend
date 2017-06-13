@@ -20,7 +20,13 @@ function insert(object, cb){
 ```
 
 ```javascript
-function getLastBlock(){
+function getLastBlock(cb){
     //check db for highest block number inserted
     //return blocknumber or -1 if nothing is inserted yet.
 }
+
+```javascript
+function disconnect(){
+    //close db connection
+}
+```

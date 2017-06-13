@@ -6,10 +6,6 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/steffen93/p2b2.git"
-  },
   "keywords": [
     "blockchain",
     "ethereum",
@@ -19,6 +15,7 @@
   "author": "Steffen Härtlein",
   "license": "MIT",
   "dependencies": {
+    "es6-promise": "^4.1.0",
     "mongodb": "^2.2.28"
   }
 }
