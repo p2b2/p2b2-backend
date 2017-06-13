@@ -57,3 +57,9 @@ typings/
 # dotenv environment variables file
 .env
 
+
+dataextractor/\.idea/
+
+dataextractor/connectors/neo4j/\.idea/
+
+*.iml
