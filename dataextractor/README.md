@@ -13,7 +13,7 @@ function connect(cb) {
 
 ```javascript
 function insert(object, cb){
-    ...
+    //...
     //insert object into db
     cb(null, success);
 }
@@ -24,6 +24,7 @@ function getLastBlock(cb){
     //check db for highest block number inserted
     //return blocknumber or -1 if nothing is inserted yet.
 }
+```
 
 ```javascript
 function disconnect(){
