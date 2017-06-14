@@ -1,5 +1,5 @@
 {
     "connectors": [
-        "mongodb"
+        "neo4j"
     ]
 }

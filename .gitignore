@@ -63,3 +63,5 @@ dataextractor/\.idea/
 dataextractor/connectors/neo4j/\.idea/
 
 *.iml
+
+\.idea/

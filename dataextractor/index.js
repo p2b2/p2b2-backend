@@ -1,12 +1,19 @@
+'use strict';
+
 const Web3 = require("web3");
 var Promise = require("es6-promise").Promise;
 const config = require("./config.json");
 const mongoConnect = require("./connectors/mongodb/index.js");
 const neo4jConnect = require("./connectors/neo4j/index.js");
+const winston = require('winston');
+
+// At RisingStack, we usually set the configuration from an environment variable called LOG_LEVEL
+// winston.level = process.env.LOG_LEVEL
+winston.level = 'debug';
 var web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545"));
 
 var connectors = {
-	"mongodb": mongoConnect, 
+	"mongodb": mongoConnect,
 	"neo4j": neo4jConnect
 };
 
@@ -56,7 +63,9 @@ var insertBlock = function(blockNr, connector, cb){
 				if(error)
 					cb(error);
 				else
-					console.log("Inserted block " + blockNr);
+                    winston.log('info', 'dataectractor - Inserted block', {
+                        blockNumber: blockNr
+                    });
 					cb(null, blockNr + 1, connector)
 			})
 		} else {
@@ -65,35 +74,52 @@ var insertBlock = function(blockNr, connector, cb){
 	})
 };
 
-var blockInserted = function(err, nextBlock, connector){
+var blockInserted = (err, nextBlock, connector) => {
 	if(err){
-		console.error(err.message);
-		connector.disconnect()
+        winston.log('error', 'dataectractor - inserting block failed:', {
+            error: err.message
+        });
+        winston.log('warn', 'dataectractor - stopped inserting blocks!');
+		connector.disconnect();
 	} else {
 		if(nextBlock > 0){
-			insertBlock(nextBlock, connector, blockInserted)
+			insertBlock(nextBlock, connector, blockInserted);
 		} else {
 			connector.disconnect();
-			console.log("Stopped inserting blocks")
+            winston.log('info', 'dataectractor - Stopped inserting blocks');
 		}
 	}
 };
 
-var insertBlocks = function(res) {
-	for (var i = 0; i < usedConnectors.length; i++) {
-		var connector = usedConnectors[i];
+var insertBlocks = (res) => {
+
+    winston.log('info', 'dataectractor - Start inserting blocks');
+	for (let i = 0; i < usedConnectors.length; i++) {
+		let connector = usedConnectors[i];
 		connector.getLastBlock((error, lastBlock) => {
 			if(error){
-				console.error(error.message)
+                winston.log('error', 'dataectractor - getting last block from connector failed:', {
+                    error: error.message
+                });
 			} else {
-				var firstBlock = lastBlock + 1;
+                let firstBlock = lastBlock + 1;
+                winston.log('info', 'dataectractor - next block to insert recieved:', {
+                    firstBlock: firstBlock
+                });
 				insertBlock(firstBlock, connector, blockInserted);
 			}
 		})
-		
 	}
 };
 
-Promise.all(connections).then(insertBlocks).catch(err => {
-	console.error(err.message)
+Promise.all(connections).then(() => {
+    if (web3.isConnected()) {
+        insertBlocks();
+    } else {
+        winston.log('error', 'dataectractor - web3 is not connected to your ethereum node!');
+    }
+}).catch(err => {
+    winston.log('error', 'dataectractor - could not establish connection to the database:', {
+        error: err.message
+    });
 });
