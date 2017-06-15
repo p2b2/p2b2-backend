@@ -86,25 +86,23 @@ Neo4jConnector.prototype.insert = function (block, callback) {
     if (!isFunction(callback)) {
         throw new Error("missing callback function parameter")
     } else {
+        // variable to decide if the transaction should be committed or rolled back
+        let success = true;
+        // the end result of the transaction
+        let transactionResult = null;
+        // Create a transaction to run multiple statements
+        let tx = session.beginTransaction();
 
-     //   console.log(block);
+        // TODO: Extract parts of this function into separate functions
 
-        // TODO: change the following hardcoded example. I will continue tomorrow :)
-        let accountAddress = '0x486e34a386';
-        let accountValue = 34;
-
-        let query = //  'CREATE (a:Account {address: $address, value: $value}) \n ' +
-            'CREATE (b:Block {name: $blockNumber, difficulty: $blockDifficulty, extraData: $blockExtraData, ' +
+        /*********************** Start: inserting block as a node and chaining them with edges *********************/
+        // create a Block node
+        // run statement in a transaction
+        let queryCreateBlock = 'CREATE (b:Block {name: $blockNumber, difficulty: $blockDifficulty, extraData: $blockExtraData, ' +
             'gasLimit: $blockGasLimit, gasUsed: $blockGasUsed, miner: $blockMiner, size: $blockSize, ' +
-            'timestamp: $blockTimestamp, totalDifficulty: $blockTotalDifficulty}); ';
-        if (block.number > 0) query += 'MATCH (bNew:Block {name: $blockNumber}), (bOld:Block {name: $previousBlockNumber}) CREATE (bOld)-[:Chain ]->(bNew); ';
-        query += "RETURN b";
-
-        let params = {
-            address: accountAddress,
-            value: neo4j.int(accountValue),
+            'timestamp: $blockTimestamp, totalDifficulty: $blockTotalDifficulty}) RETURN b';
+        let paramsCreateBlock = {
             blockNumber: neo4j.int(block.number),
-            previousBlockNumber: neo4j.int(block.number-1),
             blockDifficulty: neo4j.int(block.difficulty),
             blockExtraData: block.extraData,
             blockGasLimit: neo4j.int(block.gasLimit),
@@ -114,25 +112,94 @@ Neo4jConnector.prototype.insert = function (block, callback) {
             blockTimestamp: neo4j.int(block.timestamp),
             blockTotalDifficulty: neo4j.int(block.totalDifficulty)
         };
-
-        let resultPromise = session.run(query, params);
-
-        resultPromise.then(result => {
-            let singleRecord = result.records[0];
-            let node = singleRecord.get(0);
-
-            winston.log('info', 'Neo4jConnector - Insertion succeeded:', {
-                result: node.properties.name
+        tx.run(queryCreateBlock, paramsCreateBlock)
+            .subscribe({
+                onNext: (record) => {
+                    transactionResult = record;
+                },
+                onCompleted: () => {
+                 //   session.close();
+                },
+                onError: (error) => {
+                    success = false;
+                    winston.log('error', 'Neo4jConnector - Transaction statement failed:', {
+                        error: error.message
+                    });
+                }
             });
 
-            callback(null, result);
-
-        }).catch(err => {
-            winston.log('error', 'Neo4jConnector - Insertion failed:', {
-                error: err.message
+        // chain the Block nodes with edges
+        // run statement in a transaction
+        let queryCreateBlockEdge = 'MATCH (bNew:Block {name: $blockNumber}), (bOld:Block {name: $previousBlockNumber}) ' +
+            'CREATE (bOld)-[c:Chain ]->(bNew) RETURN c ';
+        let paramsCreateBlockEdge = {
+            blockNumber: neo4j.int(block.number),
+            previousBlockNumber: neo4j.int(block.number-1)
+        };
+        tx.run(queryCreateBlockEdge, paramsCreateBlockEdge)
+            .subscribe({
+                onError: (error) => {
+                    success = false;
+                    winston.log('error', 'Neo4jConnector - Transaction statement failed:', {
+                        error: error.message
+                    });
+                }
             });
-            callback(err, null);
-        });
+        /*********************** End: inserting block as a node and chaining them with edges *********************/
+
+
+        /*********************** Start: inserting transactions as edges between accounts/contracts. **********
+         * If the accounts/contracts are not created as nodes yet, we have to do it here *********************/
+            // TODO: Iterate over the transactions, that are in the block. For each transaction check if the
+            // TODO: sending and receiving account/contract are already created as nodes in the graph.
+            // TODO: If not create them. Then insert the transactions as edges between the sending and
+            // TODO: receiving account/contract: (Account) ---transaction ---> (Account)
+            // TODO: Alternatively: (Account) ----out----> (Transaction) ----in----> (Account)
+
+        // create an Account node
+        // run statement in a transaction
+        let queryCreateAccount = 'CREATE (a:Account {address: $address, value: $value}) RETURN a ';
+        let paramsCreateAccount = {
+            address: Math.random().toString(),
+            value: neo4j.int(35)};
+        tx.run(queryCreateAccount, paramsCreateAccount)
+            .subscribe({
+                onError: (error) => {
+                    success = false;
+                    winston.log('error', 'Neo4jConnector - Transaction statement failed:', {
+                        error: error.message
+                    });
+                }
+            });
+        /*********************** End: inserting transactions as edges between accounts/contracts. **************/
+
+        /*********************** Start: committing the transaction. **************/
+        //decide if the transaction should be committed or rolled back
+        if (success) {
+            tx.commit()
+                .subscribe({
+                    onCompleted: () => {
+                        // this transaction is now committed
+                        winston.log('info', 'Neo4jConnector - Insertion transaction is now committed:', {
+                            result: transactionResult
+                        });
+                        callback(null, transactionResult);
+                    },
+                    onError: (error) => {
+                        winston.log('error', 'Neo4jConnector - Transaction commit failed:', {
+                            error: error.message
+                        });
+                        tx.rollback();
+                        callback(error, null);
+                    }
+                });
+        } else {
+            //transaction is rolled black and nothing is created in the database
+            winston.log('error', 'Neo4jConnector - Transaction rolled back');
+            tx.rollback();
+            callback(new Error("At least one statement of the transaction failed!"), null);
+        }
+        /*********************** End: committing the transaction. **************/
     }
 };
 
