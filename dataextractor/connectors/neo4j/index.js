@@ -72,6 +72,8 @@ Neo4jConnector.prototype.getLastBlock = function (callback) {
                 block: lastBlock
             });
 
+            // TODO: if lastBlock == -1 create database scheme (uniqueness of accounts and blocks etc.)
+
             callback(null, lastBlock);
         }).catch(err => {
             winston.log('error', 'Neo4jConnector - Could not get last inserted block:', {
