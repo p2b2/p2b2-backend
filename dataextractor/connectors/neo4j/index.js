@@ -13,6 +13,7 @@ const password = "p2b2";
 const uri = "bolt://localhost:7687";
 var session = null;
 var driver = null;
+var startBlock = -1;
 
 var isFunction = (f) => {
     return (typeof f === 'function');
@@ -60,13 +61,12 @@ Neo4jConnector.prototype.getLastBlock = (callback) => {
     if (!isFunction(callback)) {
         throw new Error("missing callback function parameter")
     } else {
-        let resultPromise = session.run('MATCH (n:Block) return MAX(n.name)');
+        let resultPromise = session.run('MATCH (n:Block) return MAX(n.blockNumber)');
 
         resultPromise.then(result => {
             let singleRecord = result.records[0];
             let singleResult = singleRecord.get(0);
-            //  let lastBlock = -1;
-            let lastBlock = 100000;
+            let lastBlock = startBlock;
             if (singleResult) lastBlock = singleResult.low;
 
             winston.log('debug', 'Neo4jConnector - Last inserted block:', {
@@ -74,6 +74,8 @@ Neo4jConnector.prototype.getLastBlock = (callback) => {
             });
 
             // TODO: if lastBlock == -1 create database scheme (uniqueness of accounts and blocks etc.)
+            // TODO: CREATE CONSTRAINT ON (account:Account) ASSERT account.address IS UNIQUE;
+            // TODO: CREATE CONSTRAINT ON (contract:Contract) ASSERT contract.address IS UNIQUE
 
             callback(null, lastBlock);
         }).catch(err => {
@@ -106,23 +108,31 @@ Neo4jConnector.prototype.insert = (block, callback) => {
                 /*********************** Inserting transactions as edges between accounts/contracts. **********/
                     // Iterate over the transactions, that are in the block.
                 let transactionPromises = [];
+                let checkedAccounts = {accounts: []};
                 for (let transaction of block.transactions) {
-                    transactionPromises.push(insertTransaction(tx, transaction));
+                    transactionPromises.push(insertTransaction(tx, transaction, checkedAccounts));
                 }
 
                 /*********************** committing the transaction. **************/
-                Promise.all(transactionPromises).then(() => {
+                if (transactionPromises.length === 0) {
                     // This will commit the transaction
-                    commitTransaction(tx, success, (err, res) => {
+                    commitTransaction(tx, success, block, (err, res) => {
                         if (res) callback(null, transactionResult); else callback(err, null);
                     });
-                }).catch(err => {
-                    // This will roll back the transaction
-                    success = false;
-                    commitTransaction(tx, success, (err, res) => {
-                        if (res) callback(null, transactionResult); else callback(err, null);
+                } else {
+                    Promise.all(transactionPromises).then(() => {
+                        // This will commit the transaction
+                        commitTransaction(tx, success, block, (err, res) => {
+                            if (res) callback(null, transactionResult); else callback(err, null);
+                        });
+                    }).catch(err => {
+                        // This will roll back the transaction
+                        success = false;
+                        commitTransaction(tx, success, block, (err, res) => {
+                            if (res) callback(null, transactionResult); else callback(err, null);
+                        });
                     });
-                });
+                }
             });
         });
     }
@@ -142,7 +152,7 @@ var createBlocks = (tx, block, callback) => {
     let transactionResult = null;
     // create a Block node
     // run statement in a transaction
-    let queryCreateBlock = 'CREATE (b:Block {name: $blockNumber, difficulty: $blockDifficulty, extraData: $blockExtraData, ' +
+    let queryCreateBlock = 'CREATE (b:Block {blockNumber: $blockNumber, difficulty: $blockDifficulty, extraData: $blockExtraData, ' +
         'gasLimit: $blockGasLimit, gasUsed: $blockGasUsed, miner: $blockMiner, size: $blockSize, ' +
         'timestamp: $blockTimestamp, totalDifficulty: $blockTotalDifficulty}) RETURN b LIMIT 1';
     let paramsCreateBlock = {
@@ -184,29 +194,33 @@ var createBlocks = (tx, block, callback) => {
  * @param callback
  */
 var chainBlocks = (tx, block, callback) => {
-    // chain the Block nodes with edges
-    // run statement in a transaction
-    let queryCreateBlockEdge = 'MATCH (bNew:Block {name: $blockNumber}), (bOld:Block {name: $previousBlockNumber}) ' +
-        'CREATE (bOld)-[c:Chain ]->(bNew) RETURN c LIMIT 1 ';
-    let paramsCreateBlockEdge = {
-        blockNumber: neo4j.int(block.number),
-        previousBlockNumber: neo4j.int(block.number - 1)
-    };
-    tx.run(queryCreateBlockEdge, paramsCreateBlockEdge)
-        .subscribe({
-            onNext: (record) => {
-                winston.log('debug', 'Neo4jConnector - New block chained to the last one', {
-                    //edge: record
-                });
-                callback(null, record);
-            },
-            onError: (error) => {
-                winston.log('error', 'Neo4jConnector - Transaction statement failed:', {
-                    error: error.message
-                });
-                callback(error, null);
-            }
-        });
+    if (block.number === (startBlock + 1)) {
+        callback(null, true);
+    } else {
+        // chain the Block nodes with edges
+        // run statement in a transaction
+        let queryCreateBlockEdge = 'MATCH (bNew:Block {blockNumber: $blockNumber}), (bOld:Block {blockNumber: $previousBlockNumber}) ' +
+            'CREATE (bOld)-[c:Chain ]->(bNew) RETURN c LIMIT 1 ';
+        let paramsCreateBlockEdge = {
+            blockNumber: neo4j.int(block.number),
+            previousBlockNumber: neo4j.int(block.number - 1)
+        };
+        tx.run(queryCreateBlockEdge, paramsCreateBlockEdge)
+            .subscribe({
+                onNext: (record) => {
+                    winston.log('debug', 'Neo4jConnector - New block chained to the last one', {
+                        //edge: record
+                    });
+                    callback(null, record);
+                },
+                onError: (error) => {
+                    winston.log('error', 'Neo4jConnector - Transaction statement failed:', {
+                        error: error.message
+                    });
+                    callback(error, null);
+                }
+            });
+    }
 };
 
 /**
@@ -217,7 +231,7 @@ var chainBlocks = (tx, block, callback) => {
  * @param transaction
  * @returns {Promise}
  */
-var insertTransaction = (tx, transaction) => {
+var insertTransaction = (tx, transaction, checkedAccounts) => {
     /*********** If the accounts/contracts are not created as nodes yet, we have to do it here ************/
     // TODO: check if the sending and receiving account/contract are already created as nodes in the graph.
     // TODO: If not create them. Then insert the transactions as edges between the sending and
@@ -225,9 +239,103 @@ var insertTransaction = (tx, transaction) => {
     // TODO: Alternatively: (Account) ----out----> (Transaction) ----in----> (Account)
     return new Promise((resolve, reject) => {
 
-        resolve(true);
-        reject('Blaaaa');
+        let accountsArray = [];
+        checkAccountExistence(tx, transaction.from, checkedAccounts, (err, res) => {
+            if (err) reject(err); else {
+                if (res === false) accountsArray.push({address: transaction.from, contract: false});
+                checkAccountExistence(tx, transaction.to, checkedAccounts, (err, res) => {
+                    if (err) reject(err); else {
+                        let toAccountIsContract = false;
+                        if (transaction.input !== '0x') toAccountIsContract = true;
+                        if (res === false) accountsArray.push({address: transaction.to, contract: toAccountIsContract});
+                        createAccounts(tx, accountsArray, (err, res) => {
+                            if (err) reject(err); else {
+                                resolve(res);
+                            }
+                        });
+                    }
+                });
+            }
+        });
     })
+};
+
+var checkAccountExistence = (tx, accountAddress, checkedAccounts, callback) => {
+    if (checkedAccounts.accounts.indexOf(accountAddress) !== -1) {
+        callback(null, true);
+    } else {
+        checkedAccounts.accounts.push(accountAddress);
+        tx.run("MATCH (n) WHERE n.address = $address RETURN count(n)", {address: accountAddress})
+            .subscribe({
+                onNext: (record) => {
+                    if (record.get(0).low === 0) {
+                        // from account needs to be created
+                        //winston.log('debug', 'Neo4jConnector - Account existance check done:', {exists: false, address:accountAddress});
+                        callback(null, false);
+                    } else if (record.get(0).low === 1) {
+                        // account or contract already exists
+                        //winston.log('debug', 'Neo4jConnector - Account existance check done:', {exists: true, address:accountAddress});
+                        callback(null, true);
+                    } else if (record.get(0).low > 1) {
+                        // Error: database is corrupted (multiple nodes nodes with same address exist)
+                        winston.log('error', 'Neo4jConnector - database is corrupted (multiple nodes nodes with same address exist)');
+                        callback(new Error("Database is corrupted (multiple nodes nodes with same address exist)"), null);
+                    }
+                },
+                onError: (error) => {
+                    winston.log('error', 'Neo4jConnector - ???:', {
+                        error: error.message
+                    });
+                    callback(error, null);
+                }
+            });
+    }
+};
+
+/**
+ *
+ * @param tx The Neo4j session transaction
+ * @param accounts Is expecting an array in the following form:
+ *                  [{address: '0x52a31...', contract: false}, {address: '0x2e315...', contract: true}]
+ */
+var createAccounts = (tx, accounts, callback) => {
+    let query;
+    let params;
+    if (accounts.length === 1) {
+        query = "CREATE (a:";
+        if (accounts[0].contract) query = query + "Contract"; else query = query + "Account";
+        query = query + " {address: $address}) RETURN a";
+        params = {address: accounts[0].address};
+    } else if (accounts.length === 2) {
+        query = "CREATE (a:";
+        if (accounts[0].contract) query = query + "Contract"; else query = query + "Account";
+        query = query + " {address: $address}) CREATE (:";
+        if (accounts[1].contract) query = query + "Contract"; else query = query + "Account";
+        query = query + " {address: $address2}) RETURN a";
+        params = {address: accounts[0].address, address2: accounts[1].address};
+    } else if (accounts.length === 0) {
+        callback(null, true);
+    } else {
+        winston.log('error', 'Neo4jConnector - Invalid number of accounts to create!');
+        callback(new Error("Invalid number of accounts to create!"), null);
+    }
+
+    if (accounts.length === 1 || accounts.length === 2) {
+        // create an Account node
+        tx.run(query, params).subscribe({
+            onNext: (record) => {
+                winston.log('debug', 'Neo4jConnector - New account node(s) created');
+                callback(null, record);
+            },
+            onError: (error) => {
+                    winston.log('error', 'Neo4jConnector - Transaction statement failed:::::::::::::::::::::::::::', {
+                        error: error
+                    });
+                    callback(error, null);
+
+            }
+        });
+    }
 };
 
 /**
@@ -236,7 +344,7 @@ var insertTransaction = (tx, transaction) => {
  * @param success
  * @param callback
  */
-var commitTransaction = (tx, success, callback) => {
+var commitTransaction = (tx, success, block, callback) => {
     //decide if the transaction should be committed or rolled back
     if (success) {
         tx.commit()
@@ -258,7 +366,9 @@ var commitTransaction = (tx, success, callback) => {
             });
     } else {
         //transaction is rolled black and nothing is created in the database
-        winston.log('error', 'Neo4jConnector - Transaction rolled back');
+        winston.log('error', 'Neo4jConnector - Transaction rolled back', {
+            block: block
+        });
         tx.rollback();
         callback(new Error("At least one statement of the transaction failed!"), null);
     }
