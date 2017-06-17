@@ -13,7 +13,9 @@ const password = "p2b2";
 const uri = "bolt://localhost:7687";
 var session = null;
 var driver = null;
-var startBlock = -1;
+// TODO change back
+// var startBlock = -1;
+var startBlock = 1000000;
 
 var isFunction = (f) => {
     return (typeof f === 'function');
@@ -233,24 +235,42 @@ var chainBlocks = (tx, block, callback) => {
  */
 var insertTransaction = (tx, transaction, checkedAccounts) => {
     /*********** If the accounts/contracts are not created as nodes yet, we have to do it here ************/
-    // TODO: check if the sending and receiving account/contract are already created as nodes in the graph.
-    // TODO: If not create them. Then insert the transactions as edges between the sending and
-    // TODO: receiving account/contract: (Account) ---transaction ---> (Account)
-    // TODO: Alternatively: (Account) ----out----> (Transaction) ----in----> (Account)
     return new Promise((resolve, reject) => {
+        // check if the sending and receiving account/contract are already created as nodes in the graph. If not create them.
 
+        // This array contains the accounts that need to be created, because so far they do no exist in the graph
         let accountsArray = [];
+
+        /*********************** Checks if the FROM account exists **************/
         checkAccountExistence(tx, transaction.from, checkedAccounts, (err, res) => {
             if (err) reject(err); else {
                 if (res === false) accountsArray.push({address: transaction.from, contract: false});
+                /*********************** Checks if the TO account exists **************/
                 checkAccountExistence(tx, transaction.to, checkedAccounts, (err, res) => {
                     if (err) reject(err); else {
                         let toAccountIsContract = false;
+                        // TODO use regex instead
                         if (transaction.input !== '0x') toAccountIsContract = true;
-                        if (res === false) accountsArray.push({address: transaction.to, contract: toAccountIsContract});
+                        if (transaction.to !== null) {
+                            // the TO address is null on contract creation
+                            if (res === false) accountsArray.push({
+                                address: transaction.to,
+                                contract: toAccountIsContract
+                            });
+                        }
+                        /*********************** create the accounts if not existing **************/
                         createAccounts(tx, accountsArray, (err, res) => {
                             if (err) reject(err); else {
-                                resolve(res);
+
+                                /*********************** Insert transactions as edges **************/
+                                // TODO: Insert the transactions as edges between the sending and
+                                // TODO: receiving account/contract: (Account) ---transaction ---> (Account)
+                                // TODO: Alternatively: (Account) ----out----> (Transaction) ----in----> (Account)
+                                insertTransactionEdge(tx, transaction, (err, res) => {
+                                    if (err) reject(err); else {
+                                        resolve(transaction);
+                                    }
+                                });
                             }
                         });
                     }
@@ -309,7 +329,7 @@ var createAccounts = (tx, accounts, callback) => {
     } else if (accounts.length === 2) {
         query = "CREATE (a:";
         if (accounts[0].contract) query = query + "Contract"; else query = query + "Account";
-        query = query + " {address: $address}) CREATE (:";
+        query = query + " {address: $address}) CREATE (a2:";
         if (accounts[1].contract) query = query + "Contract"; else query = query + "Account";
         query = query + " {address: $address2}) RETURN a";
         params = {address: accounts[0].address, address2: accounts[1].address};
@@ -324,18 +344,61 @@ var createAccounts = (tx, accounts, callback) => {
         // create an Account node
         tx.run(query, params).subscribe({
             onNext: (record) => {
-                winston.log('debug', 'Neo4jConnector - New account node(s) created');
+                winston.log('debug', 'Neo4jConnector - New account node(s) created', {accounts: accounts});
                 callback(null, record);
             },
             onError: (error) => {
-                    winston.log('error', 'Neo4jConnector - Transaction statement failed:::::::::::::::::::::::::::', {
-                        error: error
-                    });
-                    callback(error, null);
+                winston.log('error', 'Neo4jConnector - Transaction statement failed', {
+                    error: error
+                });
+                callback(error, null);
 
             }
         });
     }
+};
+
+/**
+ * Creates edges from one block-node the its predecessor
+ * @param tx
+ * @param block
+ * @param callback
+ */
+var insertTransactionEdge = (tx, transaction, callback) => {
+    console.log("need resolve");
+    console.log(transaction);
+    // chain the account/contract nodes with edges representing the transaction
+    let queryCreateTransactionEdge = 'MATCH (aFrom {address: $fromAddress}), (aTo {address: $toAddress}) ' +
+        'CREATE (aFrom)-[t:Transaction { to: $toAddress, from: $fromAddress,  ' +
+        'blockNumber: $blockNumber, transactionIndex: $transactionIndex, value: $value, gas: $gas, ' +
+        'gasPrice: $gasPrice, input: $input}]->(aTo) RETURN t LIMIT 1 ';
+    let paramsCreateTransactionEdge = {
+        fromAddress: transaction.from,
+        toAddress: transaction.to,
+        blockNumber: neo4j.int(transaction.blockNumber),
+        transactionIndex: neo4j.int(transaction.transactionIndex),
+        value: neo4j.int(transaction.value.toString(10)), // value is a web3 BigNumber
+        gas: neo4j.int(transaction.gas),
+        gasPrice: neo4j.int(transaction.gasPrice.toString(10)), // gas price is a web3 BigNumber
+        input: transaction.input,
+    };
+    tx.run(queryCreateTransactionEdge, paramsCreateTransactionEdge)
+        .subscribe({
+            onNext: (record) => {
+                winston.log('debug', 'Neo4jConnector - New edge between accounts inserted representing a transaction', {
+                    //edge: record
+                });
+                console.log("resolve");
+                callback(null, record);
+            },
+            onError: (error) => {
+                winston.log('error', 'Neo4jConnector - Transaction statement failed:', {
+                    error: error.message
+                });
+                callback(error, null);
+            }
+        });
+
 };
 
 /**
