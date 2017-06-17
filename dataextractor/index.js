@@ -48,7 +48,7 @@ var cleanBlock = function(block){
 		delete block.transactions[i].v;
 		delete block.transactions[i].r;
 		delete block.transactions[i].s;
-		block.transactions[i].gasPrice = block.transactions[i].gasPrice.toNumber()
+		block.transactions[i].gasPrice = block.transactions[i].gasPrice.toNumber();
 		block.transactions[i].value = block.transactions[i].value.toNumber()
 	}
 };

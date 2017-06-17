@@ -1,8 +1,10 @@
 'use strict';
 
+const Web3 = require("web3");
 var Promise = require("es6-promise").Promise;
 const winston = require('winston');
 var neo4j = require('neo4j-driver').v1;
+var web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545"));
 
 // At RisingStack, we usually set the configuration from an environment variable called LOG_LEVEL
 // winston.level = process.env.LOG_LEVEL
@@ -13,9 +15,8 @@ const password = "p2b2";
 const uri = "bolt://localhost:7687";
 var session = null;
 var driver = null;
-// TODO change back
-// var startBlock = -1;
-var startBlock = 1000000;
+var startBlock = -1;
+// var startBlock = 1000000;
 
 var isFunction = (f) => {
     return (typeof f === 'function');
@@ -93,6 +94,7 @@ Neo4jConnector.prototype.insert = (block, callback) => {
     if (!isFunction(callback)) {
         throw new Error("missing callback function parameter")
     } else {
+
         // variable to decide if the transaction should be committed or rolled back
         let success = true;
         // the end result of the transaction
@@ -106,26 +108,40 @@ Neo4jConnector.prototype.insert = (block, callback) => {
             /*********************** chaining blocks with edges **************/
             chainBlocks(tx, block, (err, res) => {
                 if (err) success = false;
-
-                /*********************** Inserting transactions as edges between accounts/contracts. **********/
-                    // Iterate over the transactions, that are in the block.
-                let transactionPromises = [];
-                let checkedAccounts = {accounts: []};
-                for (let transaction of block.transactions) {
-                    transactionPromises.push(insertTransaction(tx, transaction, checkedAccounts));
-                }
-
-                /*********************** committing the transaction. **************/
-                if (transactionPromises.length === 0) {
-                    // This will commit the transaction
+                if (block.transactions.length === 0) {
+                    // This will commit the transaction because it did not contain any blocks
                     commitTransaction(tx, success, block, (err, res) => {
                         if (res) callback(null, transactionResult); else callback(err, null);
                     });
                 } else {
-                    Promise.all(transactionPromises).then(() => {
-                        // This will commit the transaction
-                        commitTransaction(tx, success, block, (err, res) => {
-                            if (res) callback(null, transactionResult); else callback(err, null);
+                    /*********************** Inserting account/contract nodes **********/
+                    let checkedAccounts = {accounts: []};
+                    // Iterate over the transactions, that are in the block and create accounts if not already done
+                    let accountPromises = [];
+                    for (let transaction of block.transactions) {
+                        accountPromises.push(insertAccounts(tx, transaction, block, checkedAccounts));
+                    }
+                    Promise.all(accountPromises).then(() => {
+                        /*********************** Inserting transactions as edges between accounts/contracts. **********/
+
+                            // Iterate over the transactions, that are in the block and create accounts if not already done
+                        let transactionPromises = [];
+                        for (let transaction of block.transactions) {
+                            transactionPromises.push(insertTransaction(tx, transaction, checkedAccounts));
+                        }
+
+                        /*********************** Inserting transactions as edges between accounts/contracts. **********/
+                        Promise.all(transactionPromises).then(() => {
+                            // This will commit the transaction
+                            commitTransaction(tx, success, block, (err, res) => {
+                                if (res) callback(null, transactionResult); else callback(err, null);
+                            });
+                        }).catch(err => {
+                            // This will roll back the transaction
+                            success = false;
+                            commitTransaction(tx, success, block, (err, res) => {
+                                if (res) callback(null, transactionResult); else callback(err, null);
+                            });
                         });
                     }).catch(err => {
                         // This will roll back the transaction
@@ -134,6 +150,7 @@ Neo4jConnector.prototype.insert = (block, callback) => {
                             if (res) callback(null, transactionResult); else callback(err, null);
                         });
                     });
+
                 }
             });
         });
@@ -225,22 +242,14 @@ var chainBlocks = (tx, block, callback) => {
     }
 };
 
-/**
- * Inserts a transaction to the graph database. To do so it first checks if the required accounts/contracts already
- * exist as nodes in the database and if not, creates them. Then it inserts the transaction itself as edges between
- * accounts/contracts.
- * @param tx
- * @param transaction
- * @returns {Promise}
- */
-var insertTransaction = (tx, transaction, checkedAccounts) => {
+var insertAccounts = (tx, transaction, block, checkedAccounts) => {
     /*********** If the accounts/contracts are not created as nodes yet, we have to do it here ************/
     return new Promise((resolve, reject) => {
         // check if the sending and receiving account/contract are already created as nodes in the graph. If not create them.
 
         // This array contains the accounts that need to be created, because so far they do no exist in the graph
         let accountsArray = [];
-
+        let error;
         /*********************** Checks if the FROM account exists **************/
         checkAccountExistence(tx, transaction.from, checkedAccounts, (err, res) => {
             if (err) reject(err); else {
@@ -250,35 +259,48 @@ var insertTransaction = (tx, transaction, checkedAccounts) => {
                     if (err) reject(err); else {
                         let toAccountIsContract = false;
                         // TODO use regex instead
-                        if (transaction.input !== '0x') toAccountIsContract = true;
                         if (transaction.to !== null) {
                             // the TO address is null on contract creation
                             if (res === false) accountsArray.push({
                                 address: transaction.to,
                                 contract: toAccountIsContract
                             });
-                        }
-                        /*********************** create the accounts if not existing **************/
-                        createAccounts(tx, accountsArray, (err, res) => {
-                            if (err) reject(err); else {
-
-                                /*********************** Insert transactions as edges **************/
-                                // TODO: Insert the transactions as edges between the sending and
-                                // TODO: receiving account/contract: (Account) ---transaction ---> (Account)
-                                // TODO: Alternatively: (Account) ----out----> (Transaction) ----in----> (Account)
-                                insertTransactionEdge(tx, transaction, (err, res) => {
-                                    if (err) reject(err); else {
-                                        resolve(transaction);
-                                    }
+                        } else {
+                            toAccountIsContract = true;
+                            if (web3.isConnected()) {
+                                let fullTransaction = web3.eth.getTransactionFromBlock(transaction.blockNumber, transaction.transactionIndex);
+                                let transactionReceipt = web3.eth.getTransactionReceipt(fullTransaction.hash);
+                                accountsArray.push({
+                                    address: transactionReceipt.contractAddress,
+                                    contract: toAccountIsContract
                                 });
+                                for (let transactionPointer of block.transactions) {
+                                    if (transactionPointer.transactionIndex === transaction.transactionIndex) {
+                                        transactionPointer.to = transactionReceipt.contractAddress;
+                                        checkedAccounts.accounts.push(transactionReceipt.contractAddress);
+                                    }
+                                }
+                            } else {
+                                winston.log('error', 'Neo4jConnector - web3 is not connected to your ethereum node!');
+                                reject(new Error());
                             }
-                        });
+                        }
+
+                        if (!error) {
+                            /*********************** create the accounts if not existing **************/
+                            createAccounts(tx, accountsArray, (err, res) => {
+                                if (err) reject(err); else {
+                                    resolve(res);
+                                }
+                            });
+                        }
                     }
                 });
             }
         });
     })
 };
+
 
 var checkAccountExistence = (tx, accountAddress, checkedAccounts, callback) => {
     if (checkedAccounts.accounts.indexOf(accountAddress) !== -1) {
@@ -319,6 +341,7 @@ var checkAccountExistence = (tx, accountAddress, checkedAccounts, callback) => {
  *                  [{address: '0x52a31...', contract: false}, {address: '0x2e315...', contract: true}]
  */
 var createAccounts = (tx, accounts, callback) => {
+
     let query;
     let params;
     if (accounts.length === 1) {
@@ -359,36 +382,59 @@ var createAccounts = (tx, accounts, callback) => {
 };
 
 /**
+ * Inserts a transaction to the graph database. To do so it first checks if the required accounts/contracts already
+ * exist as nodes in the database and if not, creates them. Then it inserts the transaction itself as edges between
+ * accounts/contracts.
+ * @param tx
+ * @param transaction
+ * @returns {Promise}
+ */
+var insertTransaction = (tx, transaction, checkedAccounts) => {
+    /*********** If the accounts/contracts are not created as nodes yet, we have to do it here ************/
+    return new Promise((resolve, reject) => {
+        /*********************** Insert transactions as edges **************/
+        // TODO: Insert the transactions as edges between the sending and
+        // TODO: receiving account/contract: (Account) ---transaction ---> (Account)
+        // TODO: Alternatively: (Account) ----out----> (Transaction) ----in----> (Account)
+        insertTransactionEdge(tx, transaction, (err, res) => {
+            if (err) reject(err); else {
+                resolve(transaction);
+            }
+        });
+    })
+};
+
+/**
  * Creates edges from one block-node the its predecessor
  * @param tx
  * @param block
  * @param callback
  */
 var insertTransactionEdge = (tx, transaction, callback) => {
-    console.log("need resolve");
-    console.log(transaction);
+
     // chain the account/contract nodes with edges representing the transaction
     let queryCreateTransactionEdge = 'MATCH (aFrom {address: $fromAddress}), (aTo {address: $toAddress}) ' +
-        'CREATE (aFrom)-[t:Transaction { to: $toAddress, from: $fromAddress,  ' +
-        'blockNumber: $blockNumber, transactionIndex: $transactionIndex, value: $value, gas: $gas, ' +
-        'gasPrice: $gasPrice, input: $input}]->(aTo) RETURN t LIMIT 1 ';
+     'CREATE (aFrom)-[t:Transaction { to: $toAddress, from: $fromAddress,  ' +
+     'blockNumber: $blockNumber, transactionIndex: $transactionIndex, value: $value, gas: $gas, ' +
+     'gasPrice: $gasPrice, input: $input}]->(aTo) RETURN t LIMIT 1 ';
     let paramsCreateTransactionEdge = {
         fromAddress: transaction.from,
-        toAddress: transaction.to,
         blockNumber: neo4j.int(transaction.blockNumber),
         transactionIndex: neo4j.int(transaction.transactionIndex),
         value: neo4j.int(transaction.value.toString(10)), // value is a web3 BigNumber
         gas: neo4j.int(transaction.gas),
         gasPrice: neo4j.int(transaction.gasPrice.toString(10)), // gas price is a web3 BigNumber
         input: transaction.input,
+        toAddress: transaction.to
     };
+
     tx.run(queryCreateTransactionEdge, paramsCreateTransactionEdge)
         .subscribe({
             onNext: (record) => {
                 winston.log('debug', 'Neo4jConnector - New edge between accounts inserted representing a transaction', {
                     //edge: record
                 });
-                console.log("resolve");
+
                 callback(null, record);
             },
             onError: (error) => {
