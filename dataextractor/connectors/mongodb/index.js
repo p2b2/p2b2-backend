@@ -47,6 +47,10 @@ MongoDBConnector.prototype.getLastBlock = function(callback){
 	}
 }
 
+MongoDBConnector.prototype.getCollection = function(name){
+	return mongoDatabase.collection(name)
+}
+
 MongoDBConnector.prototype.insertBatch = function(batch, callback) {
 	if(!isFunction(callback)){
 		throw new Error("missing callback function parameter");
@@ -76,5 +80,13 @@ MongoDBConnector.prototype.insert = function(object, callback) {
 		}
 	}
 };
+
+MongoDBConnector.prototype.mapReduce = function(map, reduce, options){
+	if(!isFunction(map) || !isFunction(reduce)){
+		throw new Error("map and reduce must be functons!")
+	} else {
+		return mongoDatabase.collection('blocks').mapReduce(map, reduce, options)
+	}
+}
 
 module.exports = new MongoDBConnector();
