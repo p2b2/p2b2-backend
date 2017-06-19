@@ -8,7 +8,7 @@ var web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545"));
 
 // At RisingStack, we usually set the configuration from an environment variable called LOG_LEVEL
 // winston.level = process.env.LOG_LEVEL
-winston.level = 'debug';
+winston.level = 'info';
 
 const username = "neo4j";
 const password = "p2b2";
@@ -101,12 +101,13 @@ Neo4jConnector.prototype.insert = (block, callback) => {
         let transactionResult = null;
         // Create a transaction to run multiple statements
         let tx = session.beginTransaction();
+        let checkedAccounts = {accounts: []};
 
         /*********************** inserting block as a node and chaining them with edges **************/
         createBlocks(tx, block, (err, res) => {
             if (res) transactionResult = res; else success = false;
             /*********************** chaining blocks with edges **************/
-            chainBlocks(tx, block, (err, res) => {
+            chainBlocks(tx, block, checkedAccounts, (err, res) => {
                 if (err) success = false;
                 if (block.transactions.length === 0) {
                     // This will commit the transaction because it did not contain any blocks
@@ -115,7 +116,7 @@ Neo4jConnector.prototype.insert = (block, callback) => {
                     });
                 } else {
                     /*********************** Inserting account/contract nodes **********/
-                    let checkedAccounts = {accounts: []};
+
                     // Iterate over the transactions, that are in the block and create accounts if not already done
                     let accountPromises = [];
                     for (let transaction of block.transactions) {
@@ -207,39 +208,83 @@ var createBlocks = (tx, block, callback) => {
 };
 
 /**
- * Creates edges from one block-node the its predecessor
+ * Creates edges from one block-node the its predecessor. Furthermore, the miner account is created if not
+ * already done, and an edge from miner to block is created.
  * @param tx
  * @param block
  * @param callback
  */
-var chainBlocks = (tx, block, callback) => {
-    if (block.number === (startBlock + 1)) {
-        callback(null, true);
-    } else {
-        // chain the Block nodes with edges
-        // run statement in a transaction
-        let queryCreateBlockEdge = 'MATCH (bNew:Block {blockNumber: $blockNumber}), (bOld:Block {blockNumber: $previousBlockNumber}) ' +
-            'CREATE (bOld)-[c:Chain ]->(bNew) RETURN c LIMIT 1 ';
-        let paramsCreateBlockEdge = {
-            blockNumber: neo4j.int(block.number),
-            previousBlockNumber: neo4j.int(block.number - 1)
-        };
-        tx.run(queryCreateBlockEdge, paramsCreateBlockEdge)
-            .subscribe({
-                onNext: (record) => {
-                    winston.log('debug', 'Neo4jConnector - New block chained to the last one', {
-                        //edge: record
-                    });
-                    callback(null, record);
-                },
-                onError: (error) => {
-                    winston.log('error', 'Neo4jConnector - Transaction statement failed:', {
-                        error: error.message
-                    });
-                    callback(error, null);
+var chainBlocks = (tx, block, checkedAccounts, callback) => {
+    checkAccountExistence(tx, block.miner, checkedAccounts, (err, res) => {
+        let accountsArray = [];
+        if (err) {
+            callback(err, null);
+        } else {
+            if (res === false) accountsArray.push({address: block.miner, contract: false});
+            /*********************** create the miner account if not existing **************/
+            createAccounts(tx, accountsArray, (err, res) => {
+                if (err) callback(err, null); else {
+                    // create an edge from miner to the block
+                    let queryCreateMinerEdge = 'MATCH (bNew:Block {blockNumber: $blockNumber}), (m) WHERE m.address = $minerAddress ' +
+                        'CREATE (m)-[mined:Mined ]->(bNew) RETURN mined LIMIT 1 ';
+                    let paramsCreateMinerEdge = {
+                        blockNumber: neo4j.int(block.number),
+                        minerAddress: block.miner
+                    };
+                    tx.run(queryCreateMinerEdge, paramsCreateMinerEdge)
+                        .subscribe({
+                            onNext: (record) => {
+                                winston.log('debug', 'Neo4jConnector - New edge from miner to block inserted', {
+                                    //edge: record
+                                });
+
+                                /*********************** create the transaction edge **************/
+                                if (block.number === (startBlock + 1)) {
+                                    callback(null, true);
+                                } else {
+                                    // chain the Block nodes with edges
+                                    let queryCreateBlockEdge = 'MATCH (bNew:Block {blockNumber: $blockNumber}), (bOld:Block {blockNumber: $previousBlockNumber}) ' +
+                                        'CREATE (bOld)-[c:Chain ]->(bNew) RETURN c LIMIT 1 ';
+                                    let paramsCreateBlockEdge = {
+                                        blockNumber: neo4j.int(block.number),
+                                        previousBlockNumber: neo4j.int(block.number - 1)
+                                    };
+                                    tx.run(queryCreateBlockEdge, paramsCreateBlockEdge)
+                                        .subscribe({
+                                            onNext: (record) => {
+                                                winston.log('debug', 'Neo4jConnector - New block chained to the last one', {
+                                                    //edge: record
+                                                });
+                                                callback(null, record);
+                                            },
+                                            onError: (error) => {
+                                                winston.log('error', 'Neo4jConnector - Transaction statement failed:', {
+                                                    error: error.message
+                                                });
+                                                callback(error, null);
+                                            }
+                                        });
+                                }
+
+
+                            },
+                            onError: (error) => {
+                                winston.log('error', 'Neo4jConnector - Transaction statement failed:', {
+                                    error: error.message
+                                });
+                                callback(error, null);
+                            }
+                        });
+
+
+
                 }
             });
-    }
+        }
+    });
+
+
+
 };
 
 var insertAccounts = (tx, transaction, block, checkedAccounts) => {
@@ -302,12 +347,20 @@ var insertAccounts = (tx, transaction, block, checkedAccounts) => {
 };
 
 
+
+
+
 var checkAccountExistence = (tx, accountAddress, checkedAccounts, callback) => {
     if (checkedAccounts.accounts.indexOf(accountAddress) !== -1) {
         callback(null, true);
     } else {
         checkedAccounts.accounts.push(accountAddress);
-        tx.run("MATCH (n) WHERE n.address = $address RETURN count(n)", {address: accountAddress})
+        tx.run("OPTIONAL MATCH (a:Account) WHERE a.address = $address " +
+            "WITH collect(distinct a) as r1 " +
+            "OPTIONAL MATCH (c:Contract) WHERE c.address = $address " +
+            "WITH collect(distinct c) + r1 as r2 " +
+            "UNWIND r2 as nodes " +
+            "RETURN count(nodes)", {address: accountAddress})
             .subscribe({
                 onNext: (record) => {
                     if (record.get(0).low === 0) {
