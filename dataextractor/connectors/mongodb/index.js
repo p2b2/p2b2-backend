@@ -1,11 +1,14 @@
 'use strict';
 
-var Promise = require("es6-promise").Promise
-var mongoclient = require("mongodb").MongoClient
-var mongoDBURL = "mongodb://localhost:27017/p2b2"
-var mongoDatabase
+let Promise = require("es6-promise").Promise
+let mongoclient = require("mongodb").MongoClient
+let winston = require("winston")
+let mongoDBURL = "mongodb://localhost:27017/p2b2"
+let mongoDatabase
+let currentBatch = []
+let batchSize = 1000;
 
-var isFunction = function(f){
+let isFunction = function(f){
 	return (typeof f === 'function');
 }
 
@@ -18,7 +21,7 @@ MongoDBConnector.prototype.connect = function() {
 				reject(err)
 			} else {
 				mongoDatabase = db
-				console.log("Connected successfully to mongodb.")
+				winston.log("info", "Connected successfully to mongodb.")
 				resolve(true)
 			}
 		})
@@ -34,7 +37,7 @@ MongoDBConnector.prototype.getLastBlock = function(callback){
 		throw new Error("missing callback function parameter")
 	} else {
 		mongoDatabase.collection('blocks').find({}).sort({number: -1}).limit(1).next((err, doc) => {
-			console.log(doc)
+			winston.log('debug', doc)
 			if(err){
 				callback(null, -1)
 			} else {
@@ -44,18 +47,33 @@ MongoDBConnector.prototype.getLastBlock = function(callback){
 	}
 }
 
+MongoDBConnector.prototype.insertBatch = function(batch, callback) {
+	if(!isFunction(callback)){
+		throw new Error("missing callback function parameter");
+	} else {
+		let collection = mongoDatabase.collection('blocks');
+		collection.insertMany(batch, (err, result) => {
+			if(err){
+				callback(err)
+			} else {
+				winston.log('info', 'inserted batch of size', batch.length, '| last block:', batch[batch.length-1].number)
+				callback(null, result)
+			}
+		})
+	}
+}
+
 MongoDBConnector.prototype.insert = function(object, callback) {
 	if(!isFunction(callback)){
 		throw new Error("missing callback function parameter")
 	} else {
-		var collection = mongoDatabase.collection('blocks');
-		collection.insert(object, (err, result) => {
-			if(err){
-				callback(err)
-			} else {
-				callback(null, result)
-			}
-		})
+		currentBatch.push(object);
+		if(currentBatch.length >= batchSize){
+			this.insertBatch(currentBatch, callback)
+			currentBatch = []
+		} else {
+			callback(null, true)
+		}
 	}
 };
 
