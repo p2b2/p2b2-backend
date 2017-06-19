@@ -16,7 +16,7 @@ const uri = "bolt://localhost:7687";
 var session = null;
 var driver = null;
 var startBlock = -1;
-// var startBlock = 48310;
+// var startBlock = 238687;
 
 var isFunction = (f) => {
     return (typeof f === 'function');
@@ -127,6 +127,7 @@ Neo4jConnector.prototype.insert = (block, callback) => {
         let transactionResult = null;
         // Create a transaction to run multiple statements
         let tx = session.beginTransaction();
+        // A little pointer trick to use the same array in all promise scopes and avoid double check or duplicate creation
         let checkedAccounts = {accounts: []};
 
         /*********************** inserting block as a node and chaining them with edges **************/
@@ -152,20 +153,30 @@ Neo4jConnector.prototype.insert = (block, callback) => {
                         // Otherwise we potentially violate the uniqueness constraint. That could happen when in one
                         // transaction the account is created and in the next transaction of the block it is called immediately.
                     let contractPromises = [];
+                    let transactionsNoContract = [];
                     for (let transaction of block.transactions) {
                         if (transaction.to === null) {
                             // the TO address is null on contract creation
+                            // so this handles all transactions with account creation ...
                             contractPromises.push(insertAccounts(tx, transaction, block, checkedAccounts));
+                        } else {
+                            // ... and this handles all transactions that are no contract creations
+                            transactionsNoContract.push(transaction);
                         }
                     }
 
+                    if (contractPromises.length === 0) contractPromises.push(insertAccounts(null, null, null, null));
+
                     // After we created the contracts, we can create the external accounts.
                     Promise.all(contractPromises).then(() => {
+
+
                         // Iterate over the transactions, that are in the block and create accounts if not already done
                         let externalAccountPromises = [];
-                        for (let transaction of block.transactions) {
+                        for (let transaction of transactionsNoContract) {
                             externalAccountPromises.push(insertAccounts(tx, transaction, block, checkedAccounts));
                         }
+                        if (externalAccountPromises.length === 0) externalAccountPromises.push(insertAccounts(null, null, null, null));
                         Promise.all(externalAccountPromises).then(() => {
                             /*********************** Inserting transactions as edges between accounts/contracts. **********/
 
@@ -174,6 +185,9 @@ Neo4jConnector.prototype.insert = (block, callback) => {
                             for (let transaction of block.transactions) {
                                 transactionPromises.push(insertTransaction(tx, transaction, checkedAccounts));
                             }
+
+
+
 
                             /*********************** Inserting transactions as edges between accounts/contracts. **********/
                             Promise.all(transactionPromises).then(() => {
@@ -346,11 +360,12 @@ var chainBlocks = (tx, block, checkedAccounts, callback) => {
 var insertAccounts = (tx, transaction, block, checkedAccounts) => {
     /*********** If the accounts/contracts are not created as nodes yet, we have to do it here ************/
     return new Promise((resolve, reject) => {
+        if(tx === null && transaction === null && block === null && checkedAccounts === null) resolve(true); else {
+
         // check if the sending and receiving account/contract are already created as nodes in the graph. If not create them.
 
         // This array contains the accounts that need to be created, because so far they do no exist in the graph
         let accountsArray = [];
-        let error;
         /*********************** Checks if the FROM account exists **************/
         checkAccountExistence(tx, transaction.from, checkedAccounts, (err, res) => {
             if (err) reject(err); else {
@@ -360,43 +375,101 @@ var insertAccounts = (tx, transaction, block, checkedAccounts) => {
                     if (err) reject(err); else {
                         let toAccountIsContract = false;
                         if (transaction.to !== null) {
-                            // the TO address is null on contract creation
+                            // the TO address is not null, thus no contract creation
                             if (res === false) accountsArray.push({
                                 address: transaction.to,
                                 contract: toAccountIsContract
                             });
+                            /*********************** create the accounts if not existing **************/
+                            createAccounts(tx, accountsArray, (err, res) => {
+                                if (err) reject(err); else {
+                                    resolve(res);
+                                }
+                            });
+
                         } else {
                             toAccountIsContract = true;
                             if (web3.isConnected()) {
                                 let fullTransaction = web3.eth.getTransactionFromBlock(transaction.blockNumber, transaction.transactionIndex);
                                 let transactionReceipt = web3.eth.getTransactionReceipt(fullTransaction.hash);
-                                accountsArray.push({
-                                    address: transactionReceipt.contractAddress,
-                                    contract: toAccountIsContract
-                                });
-                                for (let transactionPointer of block.transactions) {
-                                    if (transactionPointer.transactionIndex === transaction.transactionIndex) {
-                                        transactionPointer.to = transactionReceipt.contractAddress;
-                                        checkedAccounts.accounts.push(transactionReceipt.contractAddress);
+
+                                // I am checking this here, because sometimes a transaction is sent to an address
+                                // where later a contract is created (is this a hash collision????? Because prior
+                                // to the contract creation you do not know its address...)
+                                checkAccountExistence(tx, transactionReceipt.contractAddress, checkedAccounts, (err, res) => {
+                                    if (err) reject(err); else {
+
+                                        for (let transactionPointer of block.transactions) {
+                                            if (transactionPointer.transactionIndex === transaction.transactionIndex) {
+                                                transactionPointer.to = transactionReceipt.contractAddress;
+                                                checkedAccounts.accounts.push(transactionReceipt.contractAddress);
+                                            }
+                                        }
+
+                                        if (res === false) {
+
+                                            accountsArray.push({
+                                                address: transactionReceipt.contractAddress,
+                                                contract: toAccountIsContract
+                                            });
+
+                                            /*********************** create the accounts if not existing **************/
+                                            createAccounts(tx, accountsArray, (err, res) => {
+                                                if (err) reject(err); else {
+
+                                                    resolve(res);
+                                                }
+                                            });
+
+                                        } else {
+                                            // In this case, prior to contract creation, there was an transaction to
+                                            // the account address. So it was created as external account before and
+                                            // we now need to change the labels. (e.g. 0x8d2fbac64126f58394d9162a5c9270ca37cc0fed or 0x332b656504f4EAbB44C8617A42AF37461a34e9dC)
+                                            changeAccountFromExternalToContract(transactionReceipt.contractAddress, tx, (err, res) => {
+                                                if (err) reject(err); else resolve(res);
+                                            })
+                                        }
                                     }
-                                }
+                                });
                             } else {
                                 winston.log('error', 'Neo4jConnector - web3 is not connected to your ethereum node!');
                                 reject(new Error());
                             }
                         }
-
-                        if (!error) {
-                            /*********************** create the accounts if not existing **************/
-                            createAccounts(tx, accountsArray, (err, res) => {
-                                if (err) reject(err); else resolve(res);
-                            });
-                        }
                     }
                 });
             }
-        });
+        });}
     })
+};
+
+let changeAccountFromExternalToContract = (accountAddress, tx, callback) => {
+    // in this case a transaction was sent to the address where later an account is created
+    // change the accounts label from external to contract
+    let queryChangeLabel = 'MATCH (n:Account) ' +
+        'WHERE n.address = $address ' +
+        'REMOVE n:External ' +
+        'SET n:Contract ' +
+        'RETURN n LIMIT 1 ';
+    let paramsChangeLabel = {
+        address: accountAddress,
+    };
+
+    tx.run(queryChangeLabel, paramsChangeLabel)
+        .subscribe({
+            onNext: (record) => {
+                winston.log('warn', 'Neo4jConnector - Account changed from external to contract', {
+                    edge: record
+                });
+                callback(null, true);
+            },
+            onError: (error) => {
+                winston.log('error', 'Neo4jConnector - Account change from external to contract failed:', {
+                    error: error.message
+                });
+                callback(error, null);
+            }
+        });
 };
 
 
@@ -440,7 +513,6 @@ var checkAccountExistence = (tx, accountAddress, checkedAccounts, callback) => {
  *                  [{address: '0x52a31...', contract: false}, {address: '0x2e315...', contract: true}]
  */
 var createAccounts = (tx, accounts, callback) => {
-
     let query;
     let params;
     if (accounts.length === 1) {
@@ -471,7 +543,7 @@ var createAccounts = (tx, accounts, callback) => {
             },
             onError: (error) => {
                 winston.log('error', 'Neo4jConnector - Transaction statement failed', {
-                    error: error
+                    error: error.message
                 });
                 callback(error, null);
 
