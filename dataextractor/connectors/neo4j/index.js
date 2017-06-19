@@ -139,7 +139,7 @@ Neo4jConnector.prototype.insert = (block, callback) => {
                     // This will commit the transaction because it did not contain any blocks
                     commitTransaction(tx, success, block, (err, res) => {
                         if (res) {
-                            if (block.number % 1000 === 0  ) {
+                            if (block.number % 1000 === 0) {
                                 winston.log('info', 'Neo4jConnector - inserted the next 1000 blocks | last block:', block.number);
                             }
                             callback(null, transactionResult);
@@ -148,38 +148,58 @@ Neo4jConnector.prototype.insert = (block, callback) => {
                 } else {
                     /*********************** Inserting account/contract nodes **********/
 
-                        // Iterate over the transactions, that are in the block and create accounts if not already done
-                    let accountPromises = [];
+                        // First we need to create all contracts, since we have to wait for the transaction receipt.
+                        // Otherwise we potentially violate the uniqueness constraint. That could happen when in one
+                        // transaction the account is created and in the next transaction of the block it is called immediately.
+                    let contractPromises = [];
                     for (let transaction of block.transactions) {
-                        accountPromises.push(insertAccounts(tx, transaction, block, checkedAccounts));
-                    }
-                    Promise.all(accountPromises).then(() => {
-                        /*********************** Inserting transactions as edges between accounts/contracts. **********/
-
-                            // Iterate over the transactions, that are in the block and create accounts if not already done
-                        let transactionPromises = [];
-                        for (let transaction of block.transactions) {
-                            transactionPromises.push(insertTransaction(tx, transaction, checkedAccounts));
+                        if (transaction.to === null) {
+                            // the TO address is null on contract creation
+                            contractPromises.push(insertAccounts(tx, transaction, block, checkedAccounts));
                         }
+                    }
 
-                        /*********************** Inserting transactions as edges between accounts/contracts. **********/
-                        Promise.all(transactionPromises).then(() => {
-                            // This will commit the transaction
-                            commitTransaction(tx, success, block, (err, res) => {
-                                if (res) {
-                                    if (block.number % 1000 === 0  ) {
-                                        winston.log('info', 'Neo4jConnector - inserted the next 1000 blocks | last block:', block.number);
-                                    }
-                                    callback(null, transactionResult);
-                                } else callback(err, null);
+                    // After we created the contracts, we can create the external accounts.
+                    Promise.all(contractPromises).then(() => {
+                        // Iterate over the transactions, that are in the block and create accounts if not already done
+                        let externalAccountPromises = [];
+                        for (let transaction of block.transactions) {
+                            externalAccountPromises.push(insertAccounts(tx, transaction, block, checkedAccounts));
+                        }
+                        Promise.all(externalAccountPromises).then(() => {
+                            /*********************** Inserting transactions as edges between accounts/contracts. **********/
+
+                                // Iterate over the transactions, that are in the block and create accounts if not already done
+                            let transactionPromises = [];
+                            for (let transaction of block.transactions) {
+                                transactionPromises.push(insertTransaction(tx, transaction, checkedAccounts));
+                            }
+
+                            /*********************** Inserting transactions as edges between accounts/contracts. **********/
+                            Promise.all(transactionPromises).then(() => {
+                                // This will commit the transaction
+                                commitTransaction(tx, success, block, (err, res) => {
+                                    if (res) {
+                                        if (block.number % 1000 === 0) {
+                                            winston.log('info', 'Neo4jConnector - inserted the next 1000 blocks | last block:', block.number);
+                                        }
+                                        callback(null, transactionResult);
+                                    } else callback(err, null);
+                                });
+                            }).catch(err => {
+                                // This will roll back the transaction
+                                success = false;
+                                commitTransaction(tx, success, block, (err, res) => {
+                                    if (res) {
+                                        callback(null, transactionResult);
+                                    } else callback(err, null);
+                                });
                             });
                         }).catch(err => {
                             // This will roll back the transaction
                             success = false;
                             commitTransaction(tx, success, block, (err, res) => {
-                                if (res) {
-                                    callback(null, transactionResult);
-                                } else callback(err, null);
+                                if (res) callback(null, transactionResult); else callback(err, null);
                             });
                         });
                     }).catch(err => {
@@ -189,7 +209,6 @@ Neo4jConnector.prototype.insert = (block, callback) => {
                             if (res) callback(null, transactionResult); else callback(err, null);
                         });
                     });
-
                 }
             });
         });
@@ -370,9 +389,7 @@ var insertAccounts = (tx, transaction, block, checkedAccounts) => {
                         if (!error) {
                             /*********************** create the accounts if not existing **************/
                             createAccounts(tx, accountsArray, (err, res) => {
-                                if (err) reject(err); else {
-                                    resolve(res);
-                                }
+                                if (err) reject(err); else resolve(res);
                             });
                         }
                     }
