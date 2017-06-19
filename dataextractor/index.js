@@ -9,7 +9,7 @@ const winston = require('winston');
 
 // At RisingStack, we usually set the configuration from an environment variable called LOG_LEVEL
 // winston.level = process.env.LOG_LEVEL
-winston.level = 'debug';
+winston.level = 'info';
 var web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545"));
 
 var connectors = {
@@ -63,7 +63,7 @@ var insertBlock = function(blockNr, connector, cb){
 				if(error)
 					cb(error);
 				else
-                    winston.log('info', 'dataectractor - Inserted block', {
+                    winston.log('debug', 'dataectractor - Inserted block', {
                         blockNumber: blockNr
                     });
 					cb(null, blockNr + 1, connector)
