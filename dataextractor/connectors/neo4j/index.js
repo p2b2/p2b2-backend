@@ -76,10 +76,6 @@ Neo4jConnector.prototype.getLastBlock = (callback) => {
                 block: lastBlock
             });
 
-            // TODO: if lastBlock == -1 create database scheme (uniqueness of accounts and blocks etc.)
-            // TODO: CREATE CONSTRAINT ON (account:Account) ASSERT account.address IS UNIQUE;
-            // TODO: CREATE CONSTRAINT ON (contract:Contract) ASSERT contract.address IS UNIQUE
-
             callback(null, lastBlock);
         }).catch(err => {
             winston.log('error', 'Neo4jConnector - Could not get last inserted block:', {
@@ -90,10 +86,40 @@ Neo4jConnector.prototype.getLastBlock = (callback) => {
     }
 };
 
+let createScheme = () => {
+
+    session
+        .run('CREATE CONSTRAINT ON (account:Account) ASSERT account.address IS UNIQUE')
+        .then((result) => {
+            winston.log('debug', 'Database index/constraint for account created');
+        })
+        .catch((error) => {
+            winston.log('error', 'Neo4jConnector - Could not create database scheme', {
+                error: err.message
+            });
+        });
+
+    session
+        .run('CREATE CONSTRAINT ON (block:Block) ASSERT block.blockNumber IS UNIQUE')
+        .then((result) => {
+            winston.log('debug', 'Database index/constraint for block created');
+        })
+        .catch((error) => {
+            winston.log('error', 'Neo4jConnector - Could not create database scheme', {
+                error: err.message
+            });
+        });
+};
+
 Neo4jConnector.prototype.insert = (block, callback) => {
     if (!isFunction(callback)) {
         throw new Error("missing callback function parameter")
     } else {
+        // if lastBlock == -1 create database scheme (uniqueness/indexes of accounts and blocks etc.)
+        // is done asynchronous (we do not wait for the scheme to be created)
+        if (block.number === startBlock + 1) {
+            createScheme();
+        }
 
         // variable to decide if the transaction should be committed or rolled back
         let success = true;
@@ -117,7 +143,7 @@ Neo4jConnector.prototype.insert = (block, callback) => {
                 } else {
                     /*********************** Inserting account/contract nodes **********/
 
-                    // Iterate over the transactions, that are in the block and create accounts if not already done
+                        // Iterate over the transactions, that are in the block and create accounts if not already done
                     let accountPromises = [];
                     for (let transaction of block.transactions) {
                         accountPromises.push(insertAccounts(tx, transaction, block, checkedAccounts));
@@ -225,7 +251,8 @@ var chainBlocks = (tx, block, checkedAccounts, callback) => {
             createAccounts(tx, accountsArray, (err, res) => {
                 if (err) callback(err, null); else {
                     // create an edge from miner to the block
-                    let queryCreateMinerEdge = 'MATCH (bNew:Block {blockNumber: $blockNumber}), (m) WHERE m.address = $minerAddress ' +
+                    let queryCreateMinerEdge = 'MATCH (bNew:Block {blockNumber: $blockNumber}), ' +
+                        '(m:External {address: $minerAddress}) ' +
                         'CREATE (m)-[mined:Mined ]->(bNew) RETURN mined LIMIT 1 ';
                     let paramsCreateMinerEdge = {
                         blockNumber: neo4j.int(block.number),
@@ -277,12 +304,10 @@ var chainBlocks = (tx, block, checkedAccounts, callback) => {
                         });
 
 
-
                 }
             });
         }
     });
-
 
 
 };
@@ -303,7 +328,6 @@ var insertAccounts = (tx, transaction, block, checkedAccounts) => {
                 checkAccountExistence(tx, transaction.to, checkedAccounts, (err, res) => {
                     if (err) reject(err); else {
                         let toAccountIsContract = false;
-                        // TODO use regex instead
                         if (transaction.to !== null) {
                             // the TO address is null on contract creation
                             if (res === false) accountsArray.push({
@@ -347,20 +371,13 @@ var insertAccounts = (tx, transaction, block, checkedAccounts) => {
 };
 
 
-
-
-
 var checkAccountExistence = (tx, accountAddress, checkedAccounts, callback) => {
     if (checkedAccounts.accounts.indexOf(accountAddress) !== -1) {
         callback(null, true);
     } else {
         checkedAccounts.accounts.push(accountAddress);
-        tx.run("OPTIONAL MATCH (a:Account) WHERE a.address = $address " +
-            "WITH collect(distinct a) as r1 " +
-            "OPTIONAL MATCH (c:Contract) WHERE c.address = $address " +
-            "WITH collect(distinct c) + r1 as r2 " +
-            "UNWIND r2 as nodes " +
-            "RETURN count(nodes)", {address: accountAddress})
+        tx.run("MATCH (a:Account) WHERE a.address = $address " +
+            "RETURN count(a)", {address: accountAddress})
             .subscribe({
                 onNext: (record) => {
                     if (record.get(0).low === 0) {
@@ -399,14 +416,14 @@ var createAccounts = (tx, accounts, callback) => {
     let params;
     if (accounts.length === 1) {
         query = "CREATE (a:";
-        if (accounts[0].contract) query = query + "Contract"; else query = query + "Account";
+        if (accounts[0].contract) query = query + "Account:Contract"; else query = query + "Account:External";
         query = query + " {address: $address}) RETURN a";
         params = {address: accounts[0].address};
     } else if (accounts.length === 2) {
         query = "CREATE (a:";
-        if (accounts[0].contract) query = query + "Contract"; else query = query + "Account";
+        if (accounts[0].contract) query = query + "Account:Contract"; else query = query + "Account:External";
         query = query + " {address: $address}) CREATE (a2:";
-        if (accounts[1].contract) query = query + "Contract"; else query = query + "Account";
+        if (accounts[1].contract) query = query + "Account:Contract"; else query = query + "Account:External";
         query = query + " {address: $address2}) RETURN a";
         params = {address: accounts[0].address, address2: accounts[1].address};
     } else if (accounts.length === 0) {
@@ -446,9 +463,9 @@ var insertTransaction = (tx, transaction, checkedAccounts) => {
     /*********** If the accounts/contracts are not created as nodes yet, we have to do it here ************/
     return new Promise((resolve, reject) => {
         /*********************** Insert transactions as edges **************/
-        // TODO: Insert the transactions as edges between the sending and
-        // TODO: receiving account/contract: (Account) ---transaction ---> (Account)
-        // TODO: Alternatively: (Account) ----out----> (Transaction) ----in----> (Account)
+        // Insert the transactions as edges between the sending and
+        // receiving account/contract: (Account) ---transaction ---> (Account)
+        // [   Alternatively: (Account) ----out----> (Transaction) ----in----> (Account)   ]
         insertTransactionEdge(tx, transaction, (err, res) => {
             if (err) reject(err); else {
                 resolve(transaction);
@@ -466,10 +483,10 @@ var insertTransaction = (tx, transaction, checkedAccounts) => {
 var insertTransactionEdge = (tx, transaction, callback) => {
 
     // chain the account/contract nodes with edges representing the transaction
-    let queryCreateTransactionEdge = 'MATCH (aFrom {address: $fromAddress}), (aTo {address: $toAddress}) ' +
-     'CREATE (aFrom)-[t:Transaction { to: $toAddress, from: $fromAddress,  ' +
-     'blockNumber: $blockNumber, transactionIndex: $transactionIndex, value: $value, gas: $gas, ' +
-     'gasPrice: $gasPrice, input: $input}]->(aTo) RETURN t LIMIT 1 ';
+    let queryCreateTransactionEdge = 'MATCH (aFrom:Account {address: $fromAddress}), (aTo:Account {address: $toAddress}) ' +
+        'CREATE (aFrom)-[t:Transaction { to: $toAddress, from: $fromAddress,  ' +
+        'blockNumber: $blockNumber, transactionIndex: $transactionIndex, value: $value, gas: $gas, ' +
+        'gasPrice: $gasPrice, input: $input}]->(aTo) RETURN t LIMIT 1 ';
     let paramsCreateTransactionEdge = {
         fromAddress: transaction.from,
         blockNumber: neo4j.int(transaction.blockNumber),
