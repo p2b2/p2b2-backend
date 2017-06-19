@@ -16,7 +16,7 @@ const uri = "bolt://localhost:7687";
 var session = null;
 var driver = null;
 var startBlock = -1;
-// var startBlock = 1000000;
+// var startBlock = 48310;
 
 var isFunction = (f) => {
     return (typeof f === 'function');
@@ -138,7 +138,12 @@ Neo4jConnector.prototype.insert = (block, callback) => {
                 if (block.transactions.length === 0) {
                     // This will commit the transaction because it did not contain any blocks
                     commitTransaction(tx, success, block, (err, res) => {
-                        if (res) callback(null, transactionResult); else callback(err, null);
+                        if (res) {
+                            if (block.number % 1000 === 0  ) {
+                                winston.log('info', 'Neo4jConnector - inserted the next 1000 blocks | last block:', block.number);
+                            }
+                            callback(null, transactionResult);
+                        } else callback(err, null);
                     });
                 } else {
                     /*********************** Inserting account/contract nodes **********/
@@ -161,13 +166,20 @@ Neo4jConnector.prototype.insert = (block, callback) => {
                         Promise.all(transactionPromises).then(() => {
                             // This will commit the transaction
                             commitTransaction(tx, success, block, (err, res) => {
-                                if (res) callback(null, transactionResult); else callback(err, null);
+                                if (res) {
+                                    if (block.number % 1000 === 0  ) {
+                                        winston.log('info', 'Neo4jConnector - inserted the next 1000 blocks | last block:', block.number);
+                                    }
+                                    callback(null, transactionResult);
+                                } else callback(err, null);
                             });
                         }).catch(err => {
                             // This will roll back the transaction
                             success = false;
                             commitTransaction(tx, success, block, (err, res) => {
-                                if (res) callback(null, transactionResult); else callback(err, null);
+                                if (res) {
+                                    callback(null, transactionResult);
+                                } else callback(err, null);
                             });
                         });
                     }).catch(err => {
@@ -491,9 +503,9 @@ var insertTransactionEdge = (tx, transaction, callback) => {
         fromAddress: transaction.from,
         blockNumber: neo4j.int(transaction.blockNumber),
         transactionIndex: neo4j.int(transaction.transactionIndex),
-        value: neo4j.int(transaction.value.toString(10)), // value is a web3 BigNumber
+        value: neo4j.int(transaction.value), // value is a web3 BigNumber
         gas: neo4j.int(transaction.gas),
-        gasPrice: neo4j.int(transaction.gasPrice.toString(10)), // gas price is a web3 BigNumber
+        gasPrice: neo4j.int(transaction.gasPrice), // gas price is a web3 BigNumber
         input: transaction.input,
         toAddress: transaction.to
     };
