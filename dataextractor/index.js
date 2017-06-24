@@ -63,7 +63,7 @@ var insertBlock = function(blockNr, connector, cb){
 				if(error)
 					cb(error);
 				else
-                    winston.log('debug', 'dataectractor - Inserted block', {
+                    winston.log('debug', 'dataextractor - Inserted block', {
                         blockNumber: blockNr
                     });
 					cb(null, blockNr + 1, connector)
@@ -75,35 +75,35 @@ var insertBlock = function(blockNr, connector, cb){
 };
 
 var blockInserted = (err, nextBlock, connector) => {
-	if(err){
-        winston.log('error', 'dataectractor - inserting block failed:', {
+	if(err) {
+        winston.log('error', 'dataextractor - inserting block failed:', {
             error: err.message
         });
-        winston.log('warn', 'dataectractor - stopped inserting blocks!');
+        winston.log('warn', 'dataextractor - stopped inserting blocks!');
 		connector.disconnect();
 	} else {
 		if(nextBlock > 0){
 			insertBlock(nextBlock, connector, blockInserted);
 		} else {
 			connector.disconnect();
-            winston.log('info', 'dataectractor - Stopped inserting blocks');
+            winston.log('info', 'dataextractor - Stopped inserting blocks');
 		}
 	}
 };
 
 var insertBlocks = (res) => {
 
-    winston.log('info', 'dataectractor - Start inserting blocks');
+    winston.log('info', 'dataextractor - Start inserting blocks');
 	for (let i = 0; i < usedConnectors.length; i++) {
 		let connector = usedConnectors[i];
 		connector.getLastBlock((error, lastBlock) => {
 			if(error){
-                winston.log('error', 'dataectractor - getting last block from connector failed:', {
+                winston.log('error', 'dataextractor - getting last block from connector failed:', {
                     error: error.message
                 });
 			} else {
                 let firstBlock = lastBlock + 1;
-                winston.log('info', 'dataectractor - next block to insert recieved:', {
+                winston.log('info', 'dataextractor - next block to insert recieved:', {
                     firstBlock: firstBlock
                 });
 				insertBlock(firstBlock, connector, blockInserted);
@@ -116,10 +116,10 @@ Promise.all(connections).then(() => {
     if (web3.isConnected()) {
         insertBlocks();
     } else {
-        winston.log('error', 'dataectractor - web3 is not connected to your ethereum node!');
+        winston.log('error', 'dataextractor - web3 is not connected to your ethereum node!');
     }
 }).catch(err => {
-    winston.log('error', 'dataectractor - could not establish connection to the database:', {
+    winston.log('error', 'dataextractor - could not establish connection to the database:', {
         error: err.message
     });
 });

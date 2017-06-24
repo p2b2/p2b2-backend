@@ -21,7 +21,7 @@ MongoDBConnector.prototype.connect = function() {
 				reject(err)
 			} else {
 				mongoDatabase = db
-				winston.log("info", "Connected successfully to mongodb.")
+				winston.log("info", "MongoDBConnector - Connected successfully to mongodb.")
 				resolve(true)
 			}
 		})
@@ -37,11 +37,11 @@ MongoDBConnector.prototype.getLastBlock = function(callback){
 		throw new Error("missing callback function parameter")
 	} else {
 		mongoDatabase.collection('blocks').find({}).sort({number: -1}).limit(1).next((err, doc) => {
-			winston.log('debug', doc)
+			winston.log('debug', doc);
 			if(err){
 				callback(null, -1)
 			} else {
-				callback(null, doc.number)
+				if (doc === null) callback(null, -1); else callback(null, doc.number);
 			}
 		})
 	}
@@ -60,7 +60,7 @@ MongoDBConnector.prototype.insertBatch = function(batch, callback) {
 			if(err){
 				callback(err)
 			} else {
-				winston.log('info', 'inserted batch of size', batch.length, '| last block:', batch[batch.length-1].number)
+				winston.log('info', 'MongoDBConnector - inserted batch of size', batch.length, '| last block:', batch[batch.length-1].number)
 				callback(null, result)
 			}
 		})
