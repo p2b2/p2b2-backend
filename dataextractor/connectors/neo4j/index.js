@@ -297,7 +297,7 @@ var chainBlocks = (tx, block, checkedAccounts, callback) => {
                 if (err) callback(err, null); else {
                     // create an edge from miner to the block
                     let queryCreateMinerEdge = 'MATCH (bNew:Block {blockNumber: $blockNumber}), ' +
-                        '(m:External {address: $minerAddress}) ' +
+                        '(m:Account {address: $minerAddress}) ' +
                         'CREATE (m)-[mined:Mined ]->(bNew) RETURN mined LIMIT 1 ';
                     let paramsCreateMinerEdge = {
                         blockNumber: neo4j.int(block.number),
