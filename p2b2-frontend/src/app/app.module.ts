@@ -7,6 +7,14 @@ import { ChartsComponent } from './charts/charts.component';
 import { GraphComponent } from './graph/graph.component';
 import {BrowserAnimationsModule} from "@angular/platform-browser/animations";
 import {MdButtonModule, MdCheckboxModule, MdIconModule, MdMenuModule, MdToolbarModule} from "@angular/material";
+import {RouterModule, Routes} from "@angular/router";
+
+const appRoutes: Routes = [
+  {path: 'charts', component: ChartsComponent},
+  {path: 'graph', component: GraphComponent},
+  {path: 'account', component: AccountInfoComponent},
+  {path: '', redirectTo: '/account', pathMatch: 'full'}
+];
 
 @NgModule({
   declarations: [
@@ -22,7 +30,8 @@ import {MdButtonModule, MdCheckboxModule, MdIconModule, MdMenuModule, MdToolbarM
     MdCheckboxModule,
     MdMenuModule,
     MdIconModule,
-    MdToolbarModule
+    MdToolbarModule,
+    RouterModule.forRoot(appRoutes)
   ],
   providers: [],
   bootstrap: [AppComponent]
