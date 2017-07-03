@@ -8,6 +8,7 @@ import { GraphComponent } from './graph/graph.component';
 import {BrowserAnimationsModule} from "@angular/platform-browser/animations";
 import {MdButtonModule, MdCheckboxModule, MdIconModule, MdMenuModule, MdToolbarModule} from "@angular/material";
 import {RouterModule, Routes} from "@angular/router";
+import {HttpModule} from "@angular/http";
 
 const appRoutes: Routes = [
   {path: 'charts', component: ChartsComponent},
@@ -31,6 +32,7 @@ const appRoutes: Routes = [
     MdMenuModule,
     MdIconModule,
     MdToolbarModule,
+    HttpModule,
     RouterModule.forRoot(appRoutes)
   ],
   providers: [],
