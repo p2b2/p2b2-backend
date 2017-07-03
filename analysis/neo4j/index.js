@@ -60,8 +60,5 @@ Neo4jAnalyzer.prototype.getGraphForAccount = (accountAddress) => {
 };
 
 
-/****************************************************************
- **** End: Functions used to insert the blocks in the graph. ****
- ****************************************************************/
 
 module.exports = new Neo4jAnalyzer();
