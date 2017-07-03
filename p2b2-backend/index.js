@@ -2,6 +2,9 @@
 
 var express = require('express')
 var winston = require('winston')
+var anaMongoTotal = require('../analysis/mongodb/index.js')
+var anaMongo = anaMongoTotal.ana
+var anaNeo4J = require('../analysis/neo4j/index.js')
 var Web3 = require('web3')
 var web3 = new Web3()
 const redis = require('redis')
@@ -33,7 +36,6 @@ let bootstrap = function () {
     baseApp.get('/:address', validateAddress, (req, res) => {
         let address = req.params.address
         client.get(address, (error, result) => {
-            winston.debug(result)
             if(error){
                 res.send(error)
             } else {
@@ -41,6 +43,38 @@ let bootstrap = function () {
                     res.send('Nothing found')
                     client.set(address, "Address: " + address, redis.print)
                 } else {
+                    res.send(result)
+                }
+            }
+        })
+    })
+
+    baseApp.get('/:address/totalValue', validateAddress, (req, res) => {
+        let address = req.params.address
+        client.get("totalValue:" + address, (error, result) => {
+            if(error){
+                res.send(error)
+            } else {
+                if(!result){
+                    anaMongo.runAnalysis(anaMongoTotal.jobs[1], {
+                        mapQuery: {"transactions.from": {
+                            $eq: address}
+                        },
+                        resultQuery: {
+                            "_id": address
+                        }
+                    })
+                    .then(totalValue => {
+                            let value = totalValue[0].value || "0 ether"
+                            res.send(value)
+                            client.set("totalValue:" + address, value, redis.print)
+                        }
+                    )
+                    .catch(error => {
+                        res.send(error)
+                    })
+                } else {
+                    winston.info("Read from cache: " , result)
                     res.send(result)
                 }
             }
