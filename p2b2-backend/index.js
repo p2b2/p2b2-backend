@@ -57,17 +57,24 @@ let bootstrap = function () {
             } else {
                 if(!result){
                     anaMongo.runAnalysis(anaMongoTotal.jobs[1], {
-                        mapQuery: {"transactions.from": {
-                            $eq: address}
+                        map: {
+                            query: {
+                                "transactions.from": {
+                                    $eq: address
+                                }
+                            }
                         },
-                        resultQuery: {
-                            "_id": address
+                        result: {
+                            query: {
+                                "_id": address
+                            },
+                            limit: 1
                         }
                     })
                     .then(totalValue => {
-                            let value = totalValue[0].value || "0 ether"
-                            res.send(value)
+                            let value = totalValue[0].value || "0"
                             client.set("totalValue:" + address, value, redis.print)
+                            res.send(value)
                         }
                     )
                     .catch(error => {
@@ -86,4 +93,4 @@ let bootstrap = function () {
     })
 }
 
-bootstrap()
+anaMongo.init().then(bootstrap)

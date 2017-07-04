@@ -24,7 +24,7 @@ let reduceToValueSum = function(key, values){
 
 let valueFromWeiToEther = function(arr){
     for (let i = 0; i < arr.length; i++) {
-        arr[i].value = web3.fromWei(arr[i].value, 'ether') + ' ether';
+        arr[i].value = web3.fromWei(arr[i].value, 'ether').toString();
     }
     return arr
 }
@@ -63,8 +63,7 @@ let jobFromAddressToGasSum = {
         collection: 'addressToGasSum',
         sortObject: {
             value: -1
-        },
-        limit: 1
+        }
     }
 }
 
@@ -81,8 +80,7 @@ let jobFromAddressToValueSum = {
         collection: 'addressToValueSum',
         sortObject: {
             value: -1
-        },
-        limit: 1
+        }
     },
     postProcessor: valueFromWeiToEther
 }
@@ -93,22 +91,21 @@ var jobs = [
 ];
 
 var MongoDbAnalyzer = function () {
+
 };
+
+MongoDbAnalyzer.prototype.init = function(){
+    return mongoConnector.connect()
+}
 
 MongoDbAnalyzer.prototype.runAnalysis = function(job, settings) {
     if(settings){
-        if(settings.mapQuery){
-            job.options.query = settings.mapQuery
-        }
-        if(settings.resultQuery){
-            job.resultHandlerOptions.resultQuery = settings.resultQuery
-        }
+        job.options.query = settings.map.query || {}
+        job.resultHandlerOptions.resultQuery = settings.result.query || {}
+        job.resultHandlerOptions.limit = settings.result.limit || null
     }
     return new Promise((resolve, reject) => {
-        mongoConnector.connect()
-        .then(() => {
-            return mongoConnector.mapReduce(job.map, job.reduce, job.options)
-        })
+        mongoConnector.mapReduce(job.map, job.reduce, job.options)
         .then(result => {
             return job.resultHandler(job.resultHandlerOptions)
         })
