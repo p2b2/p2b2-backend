@@ -1,3 +1,18 @@
-<p>
-  account-info works!
-</p>
+<div class="p2b2-container">
+  <div id="account-form-container">
+    <form (ngSubmit)="getGraphForAccount(accountAddress)" #ethAccountForm="ngForm">
+      <md-input-container class="example-full-width" id="address-input">
+        <input mdInput placeholder="Enter an Ethereum address to display a graph" name="accountAddressInput" [(ngModel)]="accountAddress" required>
+      </md-input-container>
+      <button md-raised-button id="address-input-button" type="submit" class="btn btn-success" [disabled]="!ethAccountForm.form.valid">Get Graph</button>
+    </form>
+  </div>
+
+  <div id="account-details-container">
+    <p>Idea: Display some of your map reduce results here? And below I show a sub-graph for the account</p>
+  </div>
+
+</div>
+
+
+<div class="d3-chart" #chart></div>

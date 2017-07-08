@@ -1,15 +1,110 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, ElementRef, OnChanges, OnInit, ViewChild} from '@angular/core';
+import * as d3 from 'd3';
+import {EthereumAnalysisService} from "../../services/ethereum-analysis.service";
 
 @Component({
   selector: 'app-account-info',
   templateUrl: './account-info.component.html',
   styleUrls: ['./account-info.component.css']
 })
-export class AccountInfoComponent implements OnInit {
+export class AccountInfoComponent implements OnInit, OnChanges {
 
-  constructor() { }
+  @ViewChild('chart') private chartContainer: ElementRef;
+  // TODO: get the graph data from the service instead
+  private graphData: any = {
+    "nodes": [{name: "Peter", label: "External", id: 1}, {name: "Michael", label: "External", id: 2},
+      {name: "Neo4j", label: "Contract", id: 3}],
+    "links": [{source: 0, target: 1, type: "KNOWS", since: 2010}, {source: 0, target: 2, type: "FOUNDED"},
+      {source: 1, target: 2, type: "WORKS_ON"}]
+  };
+  private chart: any;
+  private width: number;
+  private height: number;
+  private margin: any = {top: 20, bottom: 20, left: 20, right: 20};
+  private accountAddress: string;
+
+  constructor(private ethereumAnalysisService: EthereumAnalysisService) {
+  }
 
   ngOnInit() {
+    this.createChart();
+  }
+
+  getGraphForAccount(accountAddress:string) {
+    this.ethereumAnalysisService.getAccountGraph(accountAddress).subscribe((res: Response) => {
+      console.log(res.json());
+    });
+  }
+
+  ngOnChanges() {
+    /*   if (this.chart) {
+     // TODO: check out this example for re-scaling the graph: https://github.com/keathmilligan/angular2-d3-v4/blob/master/src/app/shared/barchart/barchart.component.ts
+     this.updateChart();
+     } */
+  }
+
+
+  createChart() {
+    let element = this.chartContainer.nativeElement;
+    this.width = element.offsetWidth - this.margin.left - this.margin.right;
+    this.height = element.offsetHeight - this.margin.top - this.margin.bottom;
+
+    // force layout setup
+    let force = (<any> d3).layout.force()
+      .charge(-200).linkDistance(30).size([this.width, this.height]);
+
+    // setup svg div
+    let svg = d3.select(element).append("svg")
+      .attr("width", "100%")
+      .attr("height", "100%")
+      .attr("pointer-events", "all");
+
+    force.nodes(this.graphData.nodes).links(this.graphData.links).start();
+
+    // render relationships as lines
+    let link = svg.selectAll(".link")
+      .data(this.graphData.links).enter()
+      .append("line").attr("class", "link");
+
+    // render nodes as circles, css-class from label
+    let node = svg.selectAll(".node")
+      .data(this.graphData.nodes).enter()
+      .append("circle")
+      .attr("class", function (d) {
+        return "node " + (<any> d).label
+      })
+      .attr("r", 10)
+      .call(force.drag);
+
+    // html title attribute for title node-attribute
+    node.append("title")
+      .text(function (d) {
+        return (<any> d).title;
+      });
+
+    // force feed algo ticks for coordinate computation
+    force.on("tick", function () {
+      link.attr("x1", function (d) {
+        return (<any> d).source.x;
+      })
+        .attr("y1", function (d) {
+          return (<any> d).source.y;
+        })
+        .attr("x2", function (d) {
+          return (<any> d).target.x;
+        })
+        .attr("y2", function (d) {
+          return (<any> d).target.y;
+        });
+
+      node.attr("cx", function (d) {
+        return (<any> d).x;
+      })
+        .attr("cy", function (d) {
+          return (<any> d).y;
+        });
+    });
   }
 
 }
+
