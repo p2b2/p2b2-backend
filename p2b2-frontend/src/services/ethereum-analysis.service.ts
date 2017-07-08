@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import {RequestOptions, Headers, Http} from "@angular/http";
 import {Observable} from "rxjs/Observable";
+import 'rxjs/Rx';
 
 @Injectable()
 export class EthereumAnalysisService {
