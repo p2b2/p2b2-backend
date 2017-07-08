@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import {Http} from "@angular/http";
+import {RequestOptions, Headers, Http} from "@angular/http";
 import {Observable} from "rxjs/Observable";
 
 @Injectable()
@@ -12,6 +12,14 @@ export class EthereumAnalysisService {
     return this.http.get("http://localhost:3000")
       .map(res => {
           return res;
+      })
+      .catch(this.handleError);
+  }
+
+  public getAccountGraph(accountAddress:string): Observable<any> {
+    return this.http.get("http://localhost:3000/" + accountAddress + "/graph")
+      .map(res => {
+        return res;
       })
       .catch(this.handleError);
   }

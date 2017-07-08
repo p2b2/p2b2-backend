@@ -1,5 +1,7 @@
 import {AfterContentInit, Component, ElementRef, OnChanges, OnInit, ViewChild} from '@angular/core';
 import * as d3 from 'd3';
+import {FormControl, FormGroupDirective, NgForm} from "@angular/forms";
+import {EthereumAnalysisService} from "../../services/ethereum-analysis.service";
 
 
 @Component({
@@ -21,17 +23,24 @@ export class GraphComponent implements OnInit, OnChanges {
   private width: number;
   private height: number;
   private margin: any = {top: 20, bottom: 20, left: 20, right: 20};
+  private accountAddress: string;
 
-  constructor() {
+  constructor(private ethereumAnalysisService: EthereumAnalysisService) {
   }
 
   ngOnInit() {
     this.createChart();
   }
 
+  getGraphForAccount(accountAddress:string) {
+    this.ethereumAnalysisService.getAccountGraph(accountAddress).subscribe((res: Response) => {
+      console.log(res.json());
+    });
+  }
+
   ngOnChanges() {
     /*   if (this.chart) {
-    // TODO: check out this example for re-scaling the graph: https://github.com/keathmilligan/angular2-d3-v4/blob/master/src/app/shared/barchart/barchart.component.ts
+     // TODO: check out this example for re-scaling the graph: https://github.com/keathmilligan/angular2-d3-v4/blob/master/src/app/shared/barchart/barchart.component.ts
      this.updateChart();
      } */
   }

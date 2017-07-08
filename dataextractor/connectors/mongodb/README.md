@@ -4,6 +4,8 @@ Setup of mongodb database:
 
 Follow the installation instructions from [mongodb](https://docs.mongodb.com/manual/administration/install-community/).
 
+Start the mongodb by executing `sudo service mongod start`
+
 Then, enter the mongodb shell by typing `mongo` in your command line.
 
 Create a database for the project:

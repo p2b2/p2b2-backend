@@ -2,3 +2,12 @@
   width: 100%;
   height: 400px;
 }
+
+#address-input {
+  width:100%;
+}
+
+#address-input-button:enabled {
+  background-color: #ff367f;
+  color: #FFF;
+}
