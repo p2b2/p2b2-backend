@@ -12,10 +12,8 @@ export class AccountInfoComponent implements OnInit, OnChanges {
   @ViewChild('chart') private chartContainer: ElementRef;
   // TODO: get the graph data from the service instead
   private graphData: any = {
-    "nodes": [{name: "Peter", label: "External", id: 1}, {name: "Michael", label: "External", id: 2},
-      {name: "Neo4j", label: "Contract", id: 3}],
-    "links": [{source: 0, target: 1, type: "KNOWS", since: 2010}, {source: 0, target: 2, type: "FOUNDED"},
-      {source: 1, target: 2, type: "WORKS_ON"}]
+    "nodes": [],
+    "links": []
   };
   private chart: any;
   private width: number;
@@ -27,12 +25,13 @@ export class AccountInfoComponent implements OnInit, OnChanges {
   }
 
   ngOnInit() {
-    this.createChart();
+
   }
 
   getGraphForAccount(accountAddress:string) {
     this.ethereumAnalysisService.getAccountGraph(accountAddress).subscribe((res: Response) => {
-      console.log(res.json());
+      this.graphData = res.json();
+      this.createChart();
     });
   }
 
