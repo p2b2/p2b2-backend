@@ -55,30 +55,25 @@ let bootstrap = function () {
         })
     })
 
-    baseApp.get('/:address/graph', validateAddress, (req, res) => {
-        console.log(req);
-        let addressGraph = req.params.address + "Graph";
+    baseApp.get('/graph/:address', validateAddress, (req, res) => {
+        let addressGraph = "graph-" + req.params.address ;
         client.get(addressGraph, (error, result) => {
             if(error){
                 res.send(error)
             } else {
-
-                // TODO remove this dummy data
-                let graphData = {
-                    "nodes": [{name: "Peter", label: "External", id: 1}, {name: "Michael", label: "External", id: 2},
-                        {name: "Neo4j", label: "Contract", id: 3}],
-                    "links": [{source: 0, target: 1, type: "KNOWS", since: 2010}, {source: 0, target: 2, type: "FOUNDED"},
-                        {source: 1, target: 2, type: "WORKS_ON"}]
-                };
-                res.send(graphData);
-
-           /*     if(!result){
-                    res.send('Nothing found');
-                    client.set(addressGraph, "Address: " + addressGraph, redis.print)
+                if(!result){
                     // TODO get the graph from NEO4j and put it to redis an then return it
+                    let graphData  = {
+                        "nodes": [{name: "Peter", label: "External", id: 1}, {name: "Michael", label: "External", id: 2},
+                            {name: "Neo4j", label: "Contract", id: 3}],
+                        "links": [{source: 0, target: 1, type: "KNOWS", since: 2010}, {source: 0, target: 2, type: "FOUNDED"},
+                            {source: 1, target: 2, type: "WORKS_ON"}]
+                    };
+                    client.set(addressGraph, JSON.stringify(graphData), redis.print);
+                    res.send(graphData)
                 } else {
                     res.send(result)
-                }*/
+                }
 
             }
         })

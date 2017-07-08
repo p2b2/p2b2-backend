@@ -17,7 +17,7 @@ export class EthereumAnalysisService {
   }
 
   public getAccountGraph(accountAddress:string): Observable<any> {
-    return this.http.get("http://localhost:3000/" + accountAddress + "/graph")
+    return this.http.get("http://localhost:3000/graph/" + accountAddress)
       .map(res => {
         return res;
       })
