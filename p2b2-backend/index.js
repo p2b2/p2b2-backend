@@ -33,8 +33,7 @@ let validateAddress = (req, res, next) => {
 let bootstrap = function () {
     let baseApp = express()
 
-    baseApp.use(function(req, res, next) {
-        console.log(req);
+    baseApp.use((req, res, next) => {
         res.header("Access-Control-Allow-Origin", "*");
         res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
         next();
@@ -131,6 +130,9 @@ let bootstrap = function () {
     winston.info("Backend started" )
 }
 
-anaMongo.init().then(bootstrap).catch(err => {
-    winston.error("Mongo analytics is not initialized " + err)
+let promiseArray = [anaMongo.init(), anaNeo4J.connect()]
+Promise.all(promiseArray).then(bootstrap).catch(err => {
+    winston.log('error', 'P2B2backend - could not establish connection to the database:', {
+        error: err.message
+    });
 });

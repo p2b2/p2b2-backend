@@ -26,7 +26,7 @@ Neo4jAnalyzer.prototype.connect = () => {
             winston.log('error', 'Neo4jConnector - Driver instantiation failed');
             reject('Driver instantiation failed');
         } else {
-            winston.log('info', 'DNeo4jConnector - Driver instantiation succeeded');
+            winston.log('info', 'Neo4jConnector - Driver instantiation succeeded');
             driver = newDriver;
             session = newSession;
             resolve(true);
