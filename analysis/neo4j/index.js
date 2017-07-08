@@ -54,15 +54,63 @@ Neo4jAnalyzer.prototype.disconnect = () => {
 
 Neo4jAnalyzer.prototype.getGraphForAccount = (accountAddress) => {
     return new Promise((resolve, reject) => {
-        // TODO: get graph for the provided account address
-        let graphData  = {
-            "nodes": [{name: "Peter", label: "External", id: 1}, {name: "Michael", label: "External", id: 2},
-                {name: "Neo4j", label: "Contract", id: 3},{name: "Steffen", label: "External", id: 4}],
-            "links": [{source: 0, target: 1, type: "KNOWS", since: 2010}, {source: 0, target: 2, type: "FOUNDED"},
-                {source: 1, target: 2, type: "WORKS_ON"}]
-        };
-        resolve(graphData);
+        const resultPromise = session.run(
+            'MATCH (accountOne:Account) WHERE accountOne.address=$address ' +
+            'MATCH (neighbors:Account) ' +
+            'WHERE (accountOne)-[]-(neighbors)' +
+            'RETURN accountOne, neighbors',
+            {address: accountAddress.toLowerCase()}
+        );
+
+        resultPromise.then(result => {
+
+            let graphData = convertGraph(result);
+           /* let graphData  = {
+                "nodes": [{name: "Peter", label: "External", id: 1}, {name: "Michael", label: "External", id: 2},
+                    {name: "Neo4j", label: "Contract", id: 3},{name: "Steffen", label: "External", id: 4}],
+                "links": [{source: 0, target: 1, type: "KNOWS", since: 2010}, {source: 0, target: 2, type: "FOUNDED"},
+                    {source: 1, target: 2, type: "WORKS_ON"}]
+            };*/
+            resolve(graphData);
+        }).catch(error => reject(error));
     })
+};
+
+
+let convertGraph = function (neo4jResponse) {
+  let addedAccounts = [];
+  let addedLinks = [];
+  let convertedGraph = {
+      "nodes": [],
+      "links": []
+  };
+
+  for (let i=0; i < neo4jResponse.records.length; i++) {
+      let singleRecord = neo4jResponse.records[i];
+
+      for (let j = 0; j < singleRecord.length; j++) {
+          let node = singleRecord.get(j);
+          console.log(node);
+          if (addedAccounts.indexOf(node.identity) === -1) {
+              if (node.labels.indexOf("External") != -1) {
+                  node.label = "External";
+              } else if (node.labels.indexOf("Contract") != -1) {
+                  node.label = "Contract";
+              } else {
+                  node.label = node.labels[0];
+              }
+              let convertedNode = {
+                  "id": node.properties.address,
+                  "labels": node.labels,
+                  "properties": node.properties
+              };
+              addedAccounts.push(node.identity);
+              convertedGraph.nodes.push(convertedNode);
+          }
+      }
+  }
+
+  return convertedGraph;
 };
 
 

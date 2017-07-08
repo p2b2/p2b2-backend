@@ -61,7 +61,8 @@ let bootstrap = function () {
             if(error){
                 res.send(error)
             } else {
-                if(!result){
+             //   if(!result){
+                if(!false){
                     anaNeo4J.getGraphForAccount(req.params.address).then(graph => {
                         let graphData = graph;
                         client.set(addressGraph, JSON.stringify(graphData), redis.print);
