@@ -53,7 +53,7 @@ let bootstrap = function () {
                 }
             }
         })
-    })
+    });
 
     baseApp.get('/graph/:address', validateAddress, (req, res) => {
         let addressGraph = "graph-" + req.params.address ;
@@ -62,15 +62,14 @@ let bootstrap = function () {
                 res.send(error)
             } else {
                 if(!result){
-                    // TODO get the graph from NEO4j and put it to redis an then return it
-                    let graphData  = {
-                        "nodes": [{name: "Peter", label: "External", id: 1}, {name: "Michael", label: "External", id: 2},
-                            {name: "Neo4j", label: "Contract", id: 3}],
-                        "links": [{source: 0, target: 1, type: "KNOWS", since: 2010}, {source: 0, target: 2, type: "FOUNDED"},
-                            {source: 1, target: 2, type: "WORKS_ON"}]
-                    };
-                    client.set(addressGraph, JSON.stringify(graphData), redis.print);
-                    res.send(graphData)
+                    anaNeo4J.getGraphForAccount(req.params.address).then(graph => {
+                        let graphData = graph;
+                        client.set(addressGraph, JSON.stringify(graphData), redis.print);
+                        res.send(graphData);
+                    }).catch(err => {
+                        winston.log('error', 'P2B2backend - Could not fetch Graph for account', err);
+                        res.status(400).send('Something broke!');
+                    });
                 } else {
                     res.send(result)
                 }

@@ -55,7 +55,13 @@ Neo4jAnalyzer.prototype.disconnect = () => {
 Neo4jAnalyzer.prototype.getGraphForAccount = (accountAddress) => {
     return new Promise((resolve, reject) => {
         // TODO: get graph for the provided account address
-        resolve(true);
+        let graphData  = {
+            "nodes": [{name: "Peter", label: "External", id: 1}, {name: "Michael", label: "External", id: 2},
+                {name: "Neo4j", label: "Contract", id: 3},{name: "Steffen", label: "External", id: 4}],
+            "links": [{source: 0, target: 1, type: "KNOWS", since: 2010}, {source: 0, target: 2, type: "FOUNDED"},
+                {source: 1, target: 2, type: "WORKS_ON"}]
+        };
+        resolve(graphData);
     })
 };
 
