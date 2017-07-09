@@ -98,9 +98,34 @@ MongoDbAnalyzer.prototype.init = function(){
     return mongoConnector.connect()
 }
 
+MongoDbAnalyzer.prototype.getTotalValue = function(address){
+    return new Promise((resolve, reject) => {
+        mongoConnector.query("addressToValueSum", {
+            limit: 1,
+            filter: {
+                "_id": {
+                    $eq: address
+                }
+            }
+        }, (err, result) => {
+            if(err){
+                reject(err)
+            } else {
+                if(result){
+                    result.value = web3.fromWei(result.value, "ether")
+                    resolve(result)   
+                } else {
+                    resolve({
+                        value: -1
+                    })
+                }
+            }
+        })
+    })
+}
+
 MongoDbAnalyzer.prototype.runAnalysis = function(job, settings) {
     if(settings){
-        job.options.query = settings.map.query || {}
         job.resultHandlerOptions.resultQuery = settings.result.query || {}
         job.resultHandlerOptions.limit = settings.result.limit || null
     }

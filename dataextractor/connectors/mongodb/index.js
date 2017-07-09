@@ -47,6 +47,18 @@ MongoDBConnector.prototype.getLastBlock = function(callback){
 	}
 }
 
+MongoDBConnector.prototype.query = function(collection, options, callback){
+	let filter = options.filter || {}
+	let result = mongoDatabase.collection(collection).find(filter)
+	if(options.sort){
+		result = result.sort(sort)
+	}
+	if(options.limit){
+		result = result.limit(options.limit)
+	}
+	result.next(callback)
+}
+
 MongoDBConnector.prototype.getCollection = function(name){
 	return mongoDatabase.collection(name)
 }

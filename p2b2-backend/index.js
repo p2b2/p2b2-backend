@@ -79,55 +79,29 @@ let bootstrap = function () {
         })
     });
 
+    baseApp.put('/totalValue', (req, res) => {
+        anaMongo.runAnalysis(anaMongoTotal.jobs[1]).then(result => {
+            winston.info("MR JOB FINISHED!")
+        })
+    })
+
     baseApp.get('/:address/totalValue', validateAddress, (req, res) => {
         let address = req.params.address
 
         let totalValueKey = "totalValue:" + address;
-        let mrKey = "mr-totalValue:" + address;
         client.get(totalValueKey, (error, result) => {
             if(error){
                 res.send(error)
             } else {
                 if(!result){
-                    client.get(mrKey, (error, result) =>{
-                        if(error){
-                            res.send(error)
-                        } else {
-                            if(!result){
-                                let promise = anaMongo.runAnalysis(anaMongoTotal.jobs[1], {
-                                    map: {
-                                        query: {
-                                            "transactions.from": {
-                                                $eq: address
-                                            }
-                                        }
-                                    },
-                                    result: {
-                                        query: {
-                                            "_id": address
-                                        },
-                                        limit: 1
-                                    }
-                                })
-                                promise.then(result => {
-                                    let value = totalValue[0].value || "0"
-                                    client.set("totalValue:" + address, value, redis.print)
-                                })
-                                client.set(mrKey, address, redis.print)
-                                res.send({
-                                    status: "submitted"
-                                })
-                            } else {
-                                res.send({
-                                    status: "running"
-                                })
-                            }
-                            
-                        }
-                    })
+                    anaMongo.getTotalValue(address).then(result => {
+                        res.status(200).send(result)
+                    }).catch(error => {
+                        winston.error(error)
+                        res.sendStatus(500)
+                    })                            
                 } else {
                     winston.info("Read from cache: " , result)
-                    client.del(mrKey)
                     res.send({
                         value: result
                     })

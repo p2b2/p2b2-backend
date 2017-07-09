@@ -45,7 +45,7 @@ export class AccountInfoComponent implements OnInit, OnChanges {
     if(json.status){
       message = "Status of MR Job: " + json.status;
     } else {
-      message = "Total Value: " + json.value + " ether";
+      message = "Total Revenue: " + json.value + " ether";
     }
     d3.select(container).html(message);
   }
