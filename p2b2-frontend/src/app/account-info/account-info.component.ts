@@ -58,6 +58,7 @@ export class AccountInfoComponent implements OnInit, OnChanges {
       .attr("height", "100%")
       .attr("pointer-events", "all");
 
+    console.log(this.graphData);
     force.nodes(this.graphData.nodes).links(this.graphData.links).start();
 
     // render relationships as lines
@@ -78,7 +79,8 @@ export class AccountInfoComponent implements OnInit, OnChanges {
     // html title attribute for title node-attribute
     node.append("title")
       .text(function (d) {
-        return (<any> d).title;
+        let title = (<any> d).properties.address || (<any> d).properties.blockNumber;
+        return title;
       });
 
     // force feed algo ticks for coordinate computation
