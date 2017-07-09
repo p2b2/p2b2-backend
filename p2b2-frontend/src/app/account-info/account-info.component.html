@@ -4,9 +4,9 @@
   <div id="account-form-container">
     <form (ngSubmit)="getInfoForAccount(accountAddress)" #ethAccountForm="ngForm">
       <md-input-container class="example-full-width" id="address-input">
-        <input mdInput placeholder="Enter an Ethereum address to display a graph" name="accountAddressInput" [(ngModel)]="accountAddress" required>
+        <input mdInput placeholder="Enter an Ethereum address to display details for it" name="accountAddressInput" [(ngModel)]="accountAddress" required>
       </md-input-container>
-      <button md-raised-button id="address-input-button" type="submit" class="btn btn-success" [disabled]="!ethAccountForm.form.valid">Get Graph</button>
+      <button md-raised-button id="address-input-button" type="submit" class="btn btn-success" [disabled]="!ethAccountForm.form.valid">Get Details</button>
     </form>
   </div>
 

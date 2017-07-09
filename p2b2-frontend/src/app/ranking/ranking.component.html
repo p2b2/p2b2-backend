@@ -1,0 +1,50 @@
+<h2 style="text-align: center">Ethereum Ranking</h2>
+
+<div class="p2b2-container">
+    <h3>Top ETH revenue (sent)</h3>
+    <div id="degree-table">
+      <table >
+        <tr>
+          <th></th>
+          <th>Account Address</th>
+          <th>Revenue (ETH)</th>
+        </tr>
+        <tr *ngFor="let account of topRevenueSent">
+          <td>{{account.rank}}</td>
+          <td>{{account._id}}</td>
+          <td>{{account.value}} ether</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>Top ETH revenue (received)</h3>
+    <div id="degree-table">
+      <table >
+        <tr>
+          <th></th>
+          <th>Account Address</th>
+          <th>Revenue (ETH)</th>
+        </tr>
+        <tr *ngFor="let account of topRevenueReceived">
+          <td>{{account.rank}}</td>
+          <td>{{account._id}}</td>
+          <td>{{account.value}} ether</td>
+        </tr>
+      </table>
+    </div>
+    <h3>Top Gas Revenue (gas sent * gas price)</h3>
+    <div id="degree-table">
+      <table >
+        <tr>
+          <th></th>
+          <th>Account Address</th>
+          <th>Revenue (ETH)</th>
+        </tr>
+        <tr *ngFor="let account of topGasRevenue">
+          <td>{{account.rank}}</td>
+          <td>{{account._id}}</td>
+          <td>{{account.value}} ether</td>
+        </tr>
+      </table>
+    </div>
+</div>

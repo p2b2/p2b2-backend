@@ -10,12 +10,32 @@ export class EthereumAnalysisService {
   }
 
   public getTotalValue(accountAddress:string): Observable<any> {
-    // TODO Implement this. The code is just an example for arbitrary REST calls so far
     return this.http.get("http://localhost:3000/" + accountAddress + "/totalValue")
       .map(res => {
         return res;
       })
       .catch(this.handleError);
+  }
+
+  public getTopRevenueSent(limit: number): Observable<any> {
+    return this.http.get("http://localhost:3000/topRevenueSent?limit=" + limit).map(res => {
+      return res;
+    })
+    .catch(this.handleError);
+  }
+
+  public getTopRevenueReceived(limit: number): Observable<any> {
+    return this.http.get("http://localhost:3000/topRevenueReceived?limit=" + limit).map(res => {
+      return res;
+    })
+    .catch(this.handleError);
+  }
+
+  public getTopGasRevenue(limit: number): Observable<any> {
+    return this.http.get("http://localhost:3000/topGasRevenue?limit=" + limit).map(res => {
+      return res;
+    })
+    .catch(this.handleError);
   }
 
   public getAccountGraph(accountAddress: string): Observable<any> {

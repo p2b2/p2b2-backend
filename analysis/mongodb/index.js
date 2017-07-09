@@ -10,6 +10,12 @@ let mapFromAddressesToGas = function(){
     }
 }
 
+let mapAddressToGasRevenue = function(){
+    for (let i = 0; i < this.transactions.length; i++) {
+        emit(this.transactions[i].from, this.transactions[i].gas * this.transactions[i].gasPrice);
+    }
+}
+
 let mapFromAddressToValue = function(){
     for (let i = 0; i < this.transactions.length; i++) {
         if(this.transactions[i].value > 0){
@@ -18,15 +24,16 @@ let mapFromAddressToValue = function(){
     }
 }
 
-let reduceToValueSum = function(key, values){
-    return Array.sum(values);
+let mapToAddressToValue = function(){
+    for (let i = 0; i < this.transactions.length; i++) {
+        if(this.transactions[i].value > 0){
+            emit(this.transactions[i].to, this.transactions[i].value);
+        }
+    }
 }
 
-let valueFromWeiToEther = function(arr){
-    for (let i = 0; i < arr.length; i++) {
-        arr[i].value = web3.fromWei(arr[i].value, 'ether').toString();
-    }
-    return arr
+let reduceToValueSum = function(key, values){
+    return Array.sum(values);
 }
 
 let getEntries = function(options){
@@ -81,13 +88,48 @@ let jobFromAddressToValueSum = {
         sortObject: {
             value: -1
         }
+    }
+}
+
+let jobToAddressToValueSum = {
+    map: mapToAddressToValue,
+    reduce: reduceToValueSum,
+    options: {
+        out: {
+            replace: 'toAddressToValueSum'
+        }
     },
-    postProcessor: valueFromWeiToEther
+    resultHandler: getEntries,
+    resultHandlerOptions: {
+        collection: 'toAddressToValueSum',
+        sortObject: {
+            value: -1
+        }
+    }
+}
+
+let jobAddressToGasRevenue = {
+    map: mapAddressToGasRevenue,
+    reduce: reduceToValueSum,
+    options: {
+        out: {
+            replace: 'addressToGasRevenue'
+        }
+    },
+    resultHandler: getEntries,
+    resultHandlerOptions: {
+        collection: 'addressToGasRevenue',
+        sortObject: {
+            value: -1
+        }
+    }
 }
 
 var jobs = [
     jobFromAddressToGasSum,
-    jobFromAddressToValueSum
+    jobFromAddressToValueSum,
+    jobToAddressToValueSum,
+    jobAddressToGasRevenue
 ];
 
 var MongoDbAnalyzer = function () {
@@ -111,14 +153,75 @@ MongoDbAnalyzer.prototype.getTotalValue = function(address){
             if(err){
                 reject(err)
             } else {
-                if(result){
-                    result.value = web3.fromWei(result.value, "ether")
+                if(result && result.length > 0){
+                    result = result[0]
+                    result.value = web3.fromWei(result.value, "ether").toString()
                     resolve(result)   
                 } else {
                     resolve({
                         value: -1
                     })
                 }
+            }
+        })
+    })
+}
+
+MongoDbAnalyzer.prototype.getTopRevenueSent = function(limit){
+    return new Promise((resolve, reject) => {
+        mongoConnector.query("addressToValueSum", {
+            limit: limit,
+            sort: {
+                value: -1
+            }
+        }, (err, res) => {
+            if(err){
+                reject(err)
+            } else {
+                for (var i = 0; i < res.length; i++) {
+                    res[i].value = web3.fromWei(res[i].value, "ether").toString()
+                }
+                resolve(res)
+            }
+        })
+    })
+}
+
+MongoDbAnalyzer.prototype.getTopRevenueReceived = function(limit){
+    return new Promise((resolve, reject) => {
+        mongoConnector.query("toAddressToValueSum", {
+            limit: limit,
+            sort: {
+                value: -1
+            }
+        }, (err, res) => {
+            if(err){
+                reject(err)
+            } else {
+                for (var i = 0; i < res.length; i++) {
+                    res[i].value = web3.fromWei(res[i].value, "ether").toString()
+                }
+                resolve(res)
+            }
+        })
+    })
+}
+
+MongoDbAnalyzer.prototype.getTopGasRevenue = function(limit){
+    return new Promise((resolve, reject) => {
+        mongoConnector.query("addressToGasRevenue", {
+            limit: limit,
+            sort: {
+                value: -1
+            }
+        }, (err, res) => {
+            if(err){
+                reject(err)
+            } else {
+                for (var i = 0; i < res.length; i++) {
+                    res[i].value = web3.fromWei(res[i].value, "ether").toString()
+                }
+                resolve(res)
             }
         })
     })

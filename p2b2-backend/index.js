@@ -50,22 +50,6 @@ let bootstrap = function () {
         next();
     });
 
-    baseApp.get('/:address', validateAddress, (req, res) => {
-        let address = req.params.address
-        client.get(address, (error, result) => {
-            if(error){
-                res.send(error)
-            } else {
-                if(!result){
-                    res.send('Nothing found')
-                    client.set(address, "Address: " + address, redis.print)
-                } else {
-                    res.send(result)
-                }
-            }
-        })
-    });
-
     /***************************************
      * Start: Graph DB requests
      ***************************************/
@@ -156,9 +140,125 @@ let bootstrap = function () {
      * End: Graph DB requests
      ***************************************/
 
-    baseApp.put('/totalValue', (req, res) => {
+    baseApp.put('/jobs', (req, res) => {
+        let promises = []
+        for (var i = 0; i < anaMongoTotal.jobs.length; i++) {
+            promises.push(anaMongo.runAnalysis(anaMongoTotal.jobs[i]))
+        }
+        Promise.all(promises).then.then(result => {
+            winston.info("MR JOBS FINISHED!")
+            res.sendStatus(200)
+        }).catch(error => {
+            res.sendStatus(500)
+        })
+    })
+
+    baseApp.put('/totalValueSent', (req, res) => {
         anaMongo.runAnalysis(anaMongoTotal.jobs[1]).then(result => {
             winston.info("MR JOB FINISHED!")
+            res.sendStatus(200)
+        }).catch(error => {
+            res.sendStatus(500)
+        })
+    })
+
+    baseApp.put('/totalValueReceived', (req, res) => {
+        anaMongo.runAnalysis(anaMongoTotal.jobs[2]).then(result => {
+            winston.info("MR JOB FINISHED!")
+            res.sendStatus(200)
+        }).catch(error => {
+            res.sendStatus(500)
+        })
+    })
+
+    baseApp.put('/topGasRevenue', (req, res) => {
+        anaMongo.runAnalysis(anaMongoTotal.jobs[3]).then(result => {
+            winston.info("MR JOB FINISHED!")
+            res.sendStatus(200)
+        }).catch(error => {
+            res.sendStatus(500)
+        })
+    })
+
+    baseApp.put('/rankings', (req, res) => {
+        anaMongo.runAnalysis(anaMongoTotal.jobs[1]).then(result => {
+            winston.info("MR JOB FINISHED!")
+            res.sendStatus(200)
+        })
+        anaMongo.runAnalysis(anaMongoTotal.jobs[2]).then(result => {
+            winston.info("MR JOB FINISHED!")
+            res.sendStatus(200)
+        }).catch(error => {
+            res.sendStatus(500)
+        })
+        anaMongo.runAnalysis(anaMongoTotal.jobs[3]).then(result => {
+            winston.info("MR JOB FINISHED!")
+            res.sendStatus(200)
+        }).catch(error => {
+            res.sendStatus(500)
+        })
+    })
+
+    baseApp.get('/topRevenueSent', (req, res) => {
+        let limit = parseInt(req.query.limit, 10) || 3
+        client.get("topRevenueSent", (error, result) => {
+            if(error){
+                res.send(error)
+                return;
+            }
+            if(!result){
+                anaMongo.getTopRevenueSent(limit).then(result => {
+                    res.send(result)
+                    client.set("topRevenueSent", JSON.stringify(result), redis.print)
+                }).catch(error => {
+                    winston.error(error)
+                    res.sendStatus(500)
+                })
+            } else {
+                res.send(JSON.parse(result))
+            }
+        })
+    })
+
+    baseApp.get('/topRevenueReceived', (req, res) => {
+        let limit = parseInt(req.query.limit, 10) || 3
+        client.get("topRevenueReceived", (error, result) => {
+            if(error){
+                res.send(error)
+                return;
+            }
+            if(!result){
+                anaMongo.getTopRevenueReceived(limit).then(result => {
+                    res.send(result)
+                    client.set("topRevenueReceived", JSON.stringify(result), redis.print)
+                }).catch(error => {
+                    winston.error(error)
+                    res.sendStatus(500)
+                })
+            } else {
+                res.send(JSON.parse(result))
+            }
+        })
+    })
+
+    baseApp.get('/topGasRevenue', (req, res) => {
+        let limit = parseInt(req.query.limit, 10) || 3
+        client.get("topGasRevenue", (error, result) => {
+            if(error){
+                res.send(error)
+                return;
+            }
+            if(!result){
+                anaMongo.getTopGasRevenue(limit).then(result => {
+                    res.send(result)
+                    client.set("topGasRevenue", JSON.stringify(result), redis.print)
+                }).catch(error => {
+                    winston.error(error)
+                    res.sendStatus(500)
+                })
+            } else {
+                res.send(JSON.parse(result))
+            }
         })
     })
 

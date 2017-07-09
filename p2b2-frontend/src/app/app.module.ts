@@ -3,7 +3,7 @@ import {NgModule} from '@angular/core';
 import 'hammerjs';
 import {AppComponent} from './app.component';
 import {AccountInfoComponent} from './account-info/account-info.component';
-import {ChartsComponent} from './charts/charts.component';
+import {RankingComponent} from './ranking/ranking.component';
 import {GraphComponent} from './graph/graph.component';
 import {BrowserAnimationsModule} from "@angular/platform-browser/animations";
 import {
@@ -38,7 +38,7 @@ import {EthereumAnalysisService} from "../services/ethereum-analysis.service";
 import {CdkTableModule} from '@angular/cdk';
 
 const appRoutes: Routes = [
-  {path: 'charts', component: ChartsComponent},
+  {path: 'ranking', component: RankingComponent},
   {path: 'graph', component: GraphComponent},
   {path: 'account', component: AccountInfoComponent},
   {path: '', redirectTo: '/account', pathMatch: 'full'}
@@ -48,7 +48,7 @@ const appRoutes: Routes = [
   declarations: [
     AppComponent,
     AccountInfoComponent,
-    ChartsComponent,
+    RankingComponent,
     GraphComponent
   ],
   imports: [

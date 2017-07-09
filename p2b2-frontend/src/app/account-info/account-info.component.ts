@@ -30,7 +30,7 @@ export class AccountInfoComponent implements OnInit, OnChanges {
 
   }
 
-  getGraphForAccount(accountAddress:string) {
+  getInfoForAccount(accountAddress:string) {
     d3.select("svg").remove();
     this.ethereumAnalysisService.getAccountGraph(accountAddress).subscribe((res: Response) => {
       this.graphData = res.json();
@@ -49,10 +49,13 @@ export class AccountInfoComponent implements OnInit, OnChanges {
   setTotalValue(json:any){
     let container = this.amountElement.nativeElement;
     let message
-    if(json.status){
-      message = "Status of MR Job: " + json.status;
-    } else {
-      message = "Total Revenue: " + json.value + " ether";
+    if(json.value){
+      let valueNum = parseInt(json.value, 10) 
+      if(!isNaN(valueNum) && valueNum >= 0){
+        message = "Total revenue: " + json.value + " ether";
+      } else {
+        message = "No revenue found for this address";
+      }
     }
     d3.select(container).html(message);
   }

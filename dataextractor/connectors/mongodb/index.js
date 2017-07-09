@@ -51,12 +51,12 @@ MongoDBConnector.prototype.query = function(collection, options, callback){
 	let filter = options.filter || {}
 	let result = mongoDatabase.collection(collection).find(filter)
 	if(options.sort){
-		result = result.sort(sort)
+		result = result.sort(options.sort)
 	}
 	if(options.limit){
 		result = result.limit(options.limit)
 	}
-	result.next(callback)
+	result.toArray(callback)
 }
 
 MongoDBConnector.prototype.getCollection = function(name){
