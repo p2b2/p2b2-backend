@@ -17,7 +17,7 @@ import {
   MdInputModule,
   MdListModule,
   MdMenuModule,
-  MdNativeDateModule,
+  MdNativeDateModule, MdPaginatorModule,
   MdProgressBarModule,
   MdProgressSpinnerModule,
   MdRadioModule,
@@ -26,14 +26,16 @@ import {
   MdSidenavModule,
   MdSliderModule,
   MdSlideToggleModule,
-  MdSnackBarModule,
+  MdSnackBarModule, MdSortModule, MdTableModule,
   MdTabsModule,
-  MdToolbarModule, MdTooltipModule
+  MdToolbarModule,
+  MdTooltipModule
 } from "@angular/material";
 import {RouterModule, Routes} from "@angular/router";
 import {HttpModule} from "@angular/http";
 import {FormsModule} from "@angular/forms";
 import {EthereumAnalysisService} from "../services/ethereum-analysis.service";
+import {CdkTableModule} from '@angular/cdk';
 
 const appRoutes: Routes = [
   {path: 'charts', component: ChartsComponent},
@@ -55,12 +57,12 @@ const appRoutes: Routes = [
     FormsModule,
     HttpModule,
     RouterModule.forRoot(appRoutes),
+    CdkTableModule,
     MdButtonModule,
     MdCheckboxModule,
     MdMenuModule,
     MdIconModule,
     MdToolbarModule,
-    //CdkTableModule,
     MdAutocompleteModule,
     MdButtonToggleModule,
     MdCardModule,
@@ -73,7 +75,7 @@ const appRoutes: Routes = [
     MdInputModule,
     MdListModule,
     MdNativeDateModule,
-    //MdPaginatorModule,
+    MdPaginatorModule,
     MdProgressBarModule,
     MdProgressSpinnerModule,
     MdRadioModule,
@@ -83,8 +85,8 @@ const appRoutes: Routes = [
     MdSliderModule,
     MdSlideToggleModule,
     MdSnackBarModule,
-    //MdSortModule,
-    //MdTableModule,
+    MdSortModule,
+    MdTableModule,
     MdTabsModule,
     MdTooltipModule
   ],

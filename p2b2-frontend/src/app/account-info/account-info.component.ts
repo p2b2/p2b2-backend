@@ -16,6 +16,7 @@ export class AccountInfoComponent implements OnInit, OnChanges {
     "nodes": [],
     "links": []
   };
+  private accountsTransactions = [];
   private chart: any;
   private width: number;
   private height: number;
@@ -32,6 +33,11 @@ export class AccountInfoComponent implements OnInit, OnChanges {
   getInfoForAccount(accountAddress:string) {
     this.ethereumAnalysisService.getAccountGraph(accountAddress).subscribe((res: Response) => {
       this.graphData = res.json();
+
+      this.graphData.links.forEach((link, index) => {
+        if (link.type === "Transaction") this.accountsTransactions.push(link);
+      });
+
       this.createChart();
     });
     this.ethereumAnalysisService.getTotalValue(accountAddress).subscribe((res: Response) => {
@@ -73,7 +79,6 @@ export class AccountInfoComponent implements OnInit, OnChanges {
       .attr("height", "100%")
       .attr("pointer-events", "all");
 
-    console.log(this.graphData);
     force.nodes(this.graphData.nodes).links(this.graphData.links).start();
 
     // render relationships as lines

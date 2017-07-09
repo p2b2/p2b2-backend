@@ -11,3 +11,27 @@
   background-color: #ff367f;
   color: #FFF;
 }
+
+#transactions-table {
+  max-width: 100%;
+  max-height: 35vw;
+  overflow: auto;
+  margin-bottom: 2em;
+}
+
+#transactions-table table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+#transactions-table td, #transactions-table  th {
+  border: 1px solid #dddddd;
+  text-align: left;
+  padding: 8px;
+  max-width: 27em;
+  overflow: auto;
+}
+
+#transactions-table tr:nth-child(even) {
+  background-color: #dddddd;
+}

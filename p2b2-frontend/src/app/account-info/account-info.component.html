@@ -12,9 +12,39 @@
 
   <div id="account-details-container" #details>
     <p #totalAmount></p>
+
+    <div *ngIf="accountsTransactions.length > 0" id="transactions-table">
+      <h3>Transaction Record</h3>
+      <table >
+        <tr>
+          <th>Block Number</th>
+          <th>From</th>
+          <th>To</th>
+          <th>Value</th>
+          <th>Gas</th>
+          <th>Gas price</th>
+          <th>Input</th>
+        </tr>
+        <tr *ngFor="let transaction of accountsTransactions">
+          <td>{{transaction.properties.blockNumber}}</td>
+          <td>{{transaction.properties.from}}</td>
+          <td>{{transaction.properties.to}}</td>
+          <td>{{transaction.properties.value}}</td>
+          <td>{{transaction.properties.gas}}</td>
+          <td>{{transaction.properties.gasPrice}}</td>
+          <td>{{transaction.properties.input}}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div>
+      <h3 [hidden]="!(graphData.nodes.length > 0)">Account Graph</h3>
+      <div style="height: 65em;" class="d3-chart" #chart></div>
+    </div>
+
   </div>
 
 </div>
 
 
-<div style="height: 65em;" class="d3-chart" #chart></div>
+
