@@ -28,6 +28,8 @@
   border: 1px solid #dddddd;
   text-align: left;
   padding: 8px;
+  max-width: 27em;
+  overflow: auto;
 }
 
 #transactions-table tr:nth-child(even) {
