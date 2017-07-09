@@ -80,7 +80,7 @@ Neo4jAnalyzer.prototype.getAccountDegreeCentrality = () => {
 Neo4jAnalyzer.prototype.getExternalDegreeCentrality = () => {
     return new Promise((resolve, reject) => {
         let resultPromise = session.run(
-            'match (n:Contract)-[r:Transaction]-(m:Account) ' +
+            'match (n:External)-[r:Transaction]-(m:Account) ' +
             'return n.address, count(r) as DegreeScore ' +
             'order by DegreeScore desc ' +
             'limit 10;'
@@ -101,7 +101,7 @@ Neo4jAnalyzer.prototype.getExternalDegreeCentrality = () => {
 Neo4jAnalyzer.prototype.getContractDegreeCentrality = () => {
     return new Promise((resolve, reject) => {
         let resultPromise = session.run(
-            'match (n:External)-[r:Transaction]-(m:Account) ' +
+            'match (n:Contract)-[r:Transaction]-(m:Account) ' +
             'return n.address, count(r) as DegreeScore ' +
             'order by DegreeScore desc ' +
             'limit 10;'
