@@ -61,8 +61,9 @@ let bootstrap = function () {
             if(error){
                 res.send(error)
             } else {
-             //   if(!result){
-                if(!false){
+                if(!result){
+             //   if(!false){
+                    // TODO: if the cached record is bigger than a certain time threshold, get it new from Neo4j
                     anaNeo4J.getGraphForAccount(req.params.address).then(graph => {
                         let graphData = graph;
                         client.set(addressGraph, JSON.stringify(graphData), redis.print);
