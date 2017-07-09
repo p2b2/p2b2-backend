@@ -8,9 +8,9 @@ export class EthereumAnalysisService {
 
   constructor(private http:Http) { }
 
-  public getAccountDetails(): Observable<any> {
+  public getTotalValue(accountAddress:string): Observable<any> {
     // TODO Implement this. The code is just an example for arbitrary REST calls so far
-    return this.http.get("http://localhost:3000")
+    return this.http.get("http://localhost:3000/" + accountAddress + "/totalValue")
       .map(res => {
           return res;
       })

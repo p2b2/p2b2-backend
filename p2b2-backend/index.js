@@ -81,38 +81,56 @@ let bootstrap = function () {
 
     baseApp.get('/:address/totalValue', validateAddress, (req, res) => {
         let address = req.params.address
-        client.get("totalValue:" + address, (error, result) => {
+
+        let totalValueKey = "totalValue:" + address;
+        let mrKey = "mr-totalValue:" + address;
+        client.get(totalValueKey, (error, result) => {
             if(error){
                 res.send(error)
             } else {
                 if(!result){
-                    anaMongo.runAnalysis(anaMongoTotal.jobs[1], {
-                        map: {
-                            query: {
-                                "transactions.from": {
-                                    $eq: address
-                                }
+                    client.get(mrKey, (error, result) =>{
+                        if(error){
+                            res.send(error)
+                        } else {
+                            if(!result){
+                                let promise = anaMongo.runAnalysis(anaMongoTotal.jobs[1], {
+                                    map: {
+                                        query: {
+                                            "transactions.from": {
+                                                $eq: address
+                                            }
+                                        }
+                                    },
+                                    result: {
+                                        query: {
+                                            "_id": address
+                                        },
+                                        limit: 1
+                                    }
+                                })
+                                promise.then(result => {
+                                    let value = totalValue[0].value || "0"
+                                    client.set("totalValue:" + address, value, redis.print)
+                                })
+                                client.set(mrKey, address, redis.print)
+                                res.send({
+                                    status: "submitted"
+                                })
+                            } else {
+                                res.send({
+                                    status: "running"
+                                })
                             }
-                        },
-                        result: {
-                            query: {
-                                "_id": address
-                            },
-                            limit: 1
+                            
                         }
-                    })
-                    .then(totalValue => {
-                            let value = totalValue[0].value || "0"
-                            client.set("totalValue:" + address, value, redis.print)
-                            res.send(value)
-                        }
-                    )
-                    .catch(error => {
-                        res.send(error)
                     })
                 } else {
                     winston.info("Read from cache: " , result)
-                    res.send(result)
+                    client.del(mrKey)
+                    res.send({
+                        value: result
+                    })
                 }
             }
         })

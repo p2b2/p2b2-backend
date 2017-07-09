@@ -10,6 +10,7 @@ import {EthereumAnalysisService} from "../../services/ethereum-analysis.service"
 export class AccountInfoComponent implements OnInit, OnChanges {
 
   @ViewChild('chart') private chartContainer: ElementRef;
+  @ViewChild('totalAmount') private amountElement: ElementRef;
   // TODO: get the graph data from the service instead
   private graphData: any = {
     "nodes": [],
@@ -28,11 +29,25 @@ export class AccountInfoComponent implements OnInit, OnChanges {
 
   }
 
-  getGraphForAccount(accountAddress:string) {
+  getInfoForAccount(accountAddress:string) {
     this.ethereumAnalysisService.getAccountGraph(accountAddress).subscribe((res: Response) => {
       this.graphData = res.json();
       this.createChart();
     });
+    this.ethereumAnalysisService.getTotalValue(accountAddress).subscribe((res: Response) => {
+      this.setTotalValue(res.json());
+    })
+  }
+
+  setTotalValue(json:any){
+    let container = this.amountElement.nativeElement;
+    let message
+    if(json.status){
+      message = "Status of MR Job: " + json.status;
+    } else {
+      message = "Total Value: " + json.value + " ether";
+    }
+    d3.select(container).html(message);
   }
 
   ngOnChanges() {

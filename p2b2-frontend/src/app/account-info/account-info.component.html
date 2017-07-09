@@ -2,7 +2,7 @@
 
 <div class="p2b2-container">
   <div id="account-form-container">
-    <form (ngSubmit)="getGraphForAccount(accountAddress)" #ethAccountForm="ngForm">
+    <form (ngSubmit)="getInfoForAccount(accountAddress)" #ethAccountForm="ngForm">
       <md-input-container class="example-full-width" id="address-input">
         <input mdInput placeholder="Enter an Ethereum address to display a graph" name="accountAddressInput" [(ngModel)]="accountAddress" required>
       </md-input-container>
@@ -10,8 +10,8 @@
     </form>
   </div>
 
-  <div id="account-details-container">
-    <p>Idea: Display some of your map reduce results here? And below I show a sub-graph for the account</p>
+  <div id="account-details-container" #details>
+    <div #totalAmount></div>
   </div>
 
 </div>
