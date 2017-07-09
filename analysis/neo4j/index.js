@@ -147,53 +147,32 @@ Neo4jAnalyzer.prototype.getAccountBetweennessCentrality = () => {
 Neo4jAnalyzer.prototype.getGraphForAccounts = (accounts) => {
     accounts = JSON.parse(accounts);
     return new Promise((resolve, reject) => {
-        /* Start: get for each address the node */
-        let params = {};
-        let query = 'MATCH (n:Account) ' +
-            'WHERE n.address= $address ';
-        params["address"] = accounts[0].toLowerCase();
-        for (let i =1; i< accounts.length;i++) {
-            params["address"+i] = accounts[i].toLowerCase();
-            query = query +' OR n.address= $address' + i;
-        }
-        query = query + ' RETURN n ';
-        let nodeResultPromise = session.run(query, params);
-        /* End: get for each address the node */
 
-        /* Start: get for each address 30 links */
-        let linkPromises = [];
-        for (let i =1; i< accounts.length;i++) {
-            let linksResultPromise = session.run(
-                'MATCH (:Account {address: $address})-[r]-() ' +
-                'RETURN r Limit 30',
+        let graphResultPromises = [];
+        for (let i = 0; i < accounts.length; i++) {
+            let graphResultPromise = session.run(
+                'MATCH (accountOne:Account {address: $address})-[r]-(neighbors)' +
+                'RETURN accountOne, neighbors, r LIMIT 40',
                 {address: accounts[i].toLowerCase()}
             );
-            linkPromises.push(linksResultPromise);
+            graphResultPromises.push(graphResultPromise);
         }
-        let linksResultPromise = new Promise((resolve, reject) => {
-            Promise.all(linkPromises).then(promisesResults => {
-                let result = {records: []};
-                promisesResults.forEach((promisesResult, index) => {
-                    promisesResult.records.forEach((record, recordIndex) => {
-                        result.records.push(record);
-                    })
 
-                });
-                resolve(result);
-            }).catch(promisesError => {
-                reject(promisesError);
-            });
-        });
-        /* End: get for each address 30 links */
+        Promise.all(graphResultPromises).then(result => {
 
-        /* Start: Resolve as soon as we have the nodes and the links */
-        Promise.all([nodeResultPromise, linksResultPromise]).then(promisesResult => {
-            let graphData = convertGraph(promisesResult[0], promisesResult[1]);
+            let aggregatedResult = {records: []};
+            for (let i = 0; i < result.length; i++) {
+                for (let j = 0; j < result[i].records.length; j++) {
+                    let singleRecord =  result[i].records[j];
+                    aggregatedResult.records.push(singleRecord)
+                }
+            }
+
+            let graphData = convertGraph(aggregatedResult);
             resolve(graphData);
         }).catch(promisesError => {
             reject(promisesError);
         });
-        /* End: Resolve as soon as we have the nodes and the links */
     })
 };
 
@@ -201,26 +180,12 @@ Neo4jAnalyzer.prototype.getGraphForAccount = (accountAddress) => {
     return new Promise((resolve, reject) => {
         let nodesResultPromise = session.run(
             'MATCH (accountOne:Account {address: $address})-[r]-(neighbors)' +
-            'RETURN accountOne, neighbors, r LIMIT 100',
-            // The query below would return nodes and edges in one, but is not performing enough
-            /*  'MATCH (accountOne:Account) WHERE accountOne.address=$address ' +
-            'MATCH (neighbors:Account) ' +
-            'WHERE (accountOne)-[]-(neighbors) ' +
-            'MATCH (:Account {address: $address})-[r]-() ' +
-            'RETURN accountOne, neighbors, r ' +
-            'LIMIT 500',*/
+            'RETURN accountOne, neighbors, r LIMIT 300',
             {address: accountAddress.toLowerCase()}
         );
 
-        let linksResultPromise = session.run(
-             'MATCH (:Account {address: $address})-[r]-() ' +
-             'RETURN r '+
-             'LIMIT 500',
-            {address: accountAddress.toLowerCase()}
-        );
-
-        Promise.all([linksResultPromise, nodesResultPromise]).then(promisesResult => {
-            let graphData = convertGraph(promisesResult[1], promisesResult[0]);
+        nodesResultPromise.then(result => {
+            let graphData = convertGraph(result);
             resolve(graphData);
         }).catch(promisesError => {
             reject(promisesError);
@@ -228,108 +193,98 @@ Neo4jAnalyzer.prototype.getGraphForAccount = (accountAddress) => {
     })
 };
 
-let convertGraph = function (neo4jNodeResponse, neo4jLinkResponse) {
-    let convertedGraphNodes =  convertGraphNodes(neo4jNodeResponse);
-    let convertedGraphLinks =  convertGraphLinks(neo4jLinkResponse);
+let convertGraph = function (neo4jResponse) {
+    let addedAccounts = [];
+    let convertedNodes = [];
+    let convertedLinks = [];
 
-    for (let i = 0; i < convertedGraphLinks.length; i++) {
-        for (let j = 0; j< convertedGraphNodes.length; j++) {
-            if (convertedGraphLinks[i].source === convertedGraphNodes[j].id) convertedGraphLinks[i].source = j;
-            if (convertedGraphLinks[i].target === convertedGraphNodes[j].id) convertedGraphLinks[i].target = j;
+    for (let i = 0; i < neo4jResponse.records.length; i++) {
+        let singleRecord = neo4jResponse.records[i];
+        let nodeOne = singleRecord._fields[0];
+        let nodeTwo = singleRecord._fields[1];
+        let link = singleRecord._fields[2];
+
+        if (addedAccounts.indexOf(nodeOne.identity.toString()) === -1) {
+            let convertedNode = convertNeo4jNode(nodeOne);
+            addedAccounts.push(nodeOne.identity.toString());
+            convertedNodes.push(convertedNode);
+        }
+
+        if (addedAccounts.indexOf(nodeTwo.identity.toString()) === -1) {
+            let convertedNode = convertNeo4jNode(nodeTwo);
+            addedAccounts.push(nodeTwo.identity.toString());
+            convertedNodes.push(convertedNode);
+        }
+
+        let convertedLink = convertNeo4jLink(link);
+        if (convertedLink !== null) {
+            convertedLinks.push(convertedLink);
+        }
+    }
+
+    for (let i = 0; i < convertedLinks.length; i++) {
+        for (let j = 0; j < convertedNodes.length; j++) {
+            if (convertedLinks[i].source === convertedNodes[j].id) convertedLinks[i].source = j;
+            if (convertedLinks[i].target === convertedNodes[j].id) convertedLinks[i].target = j;
         }
     }
 
     return {
-        "nodes": convertedGraphNodes,
-        "links": convertedGraphLinks
+        "nodes": convertedNodes,
+        "links": convertedLinks
     };
 };
 
-let convertGraphLinks = function (neo4jLinkResponse) {
-    let addedLinks = [];
-    let convertedLinks = [];
+let convertNeo4jLink = function (neo4jLink) {
+    let convertedLink = null;
 
-    for (let i=0; i < neo4jLinkResponse.records.length; i++) {
-        let singleRecord = neo4jLinkResponse.records[i];
-        for (let j = 0; j < singleRecord.length; j++) {
-            let link =  singleRecord.get(j);
-            if (addedLinks.indexOf(link.identity.toString()) === -1) {
-                let convertedLink = null;
-                if (link.type === "Transaction") {
-                    link.properties = {
-                        input: link.properties.input,
-                        blockNumber: link.properties.blockNumber.toString(),
-                        gas: link.properties.gas.toString(),
-                        from: link.properties.from,
-                        transactionIndex: link.properties.transactionIndex.toString(),
-                        to: link.properties.to,
-                        value: link.properties.value.toString(),
-                        gasPrice: link.properties.gasPrice.toString()
-                    };
-                    convertedLink = {
-                        "id": link.identity.toString(),
-                        "source": link.start.toString(),
-                        "target": link.end.toString(),
-                        "type": link.type,
-                        "properties": link.properties
-                    };
-                } else if (link.type === "Mined") {
-                    convertedLink = {
-                        "id": link.identity.toString(),
-                        "source": link.start.toString(),
-                        "target": link.end.toString(),
-                        "type": link.type
-                    };
-                }
-                if (convertedLink!== null) {
-                    addedLinks.push(link.identity.toString());
-                    convertedLinks.push(convertedLink);
-                }
-            }
-        }
+    if (neo4jLink.type === "Transaction") {
+        neo4jLink.properties = {
+            input: neo4jLink.properties.input,
+            blockNumber: neo4jLink.properties.blockNumber.toString(),
+            gas: neo4jLink.properties.gas.toString(),
+            from: neo4jLink.properties.from,
+            transactionIndex: neo4jLink.properties.transactionIndex.toString(),
+            to: neo4jLink.properties.to,
+            value: neo4jLink.properties.value.toString(),
+            gasPrice: neo4jLink.properties.gasPrice.toString()
+        };
+        convertedLink = {
+            "id": neo4jLink.identity.toString(),
+            "source": neo4jLink.start.toString(),
+            "target": neo4jLink.end.toString(),
+            "type": neo4jLink.type,
+            "properties": neo4jLink.properties
+        };
+    } else if (neo4jLink.type === "Mined") {
+        convertedLink = {
+            "id": neo4jLink.identity.toString(),
+            "source": neo4jLink.start.toString(),
+            "target": neo4jLink.end.toString(),
+            "type": neo4jLink.type
+        };
     }
-  //  console.log(convertedLinks);
-    return convertedLinks;
-};
+    return convertedLink;
+}
 
-let convertGraphNodes = function (neo4jNodeResponse) {
-  let addedAccounts = [];
-  let convertedNodes = [];
-  console.log(neo4jNodeResponse);
-    console.log(neo4jNodeResponse.records[0]._fields);
-
-  for (let i=0; i < neo4jNodeResponse.records.length; i++) {
-      let singleRecord = neo4jNodeResponse.records[i];
-
-      for (let j = 0; j < singleRecord.length; j++) {
-          let node =  singleRecord.get(j);
-          if (addedAccounts.indexOf(node.identity.toString()) === -1) {
-              if (node.labels.indexOf("External") !== -1) {
-                  node.labels = "External";
-              } else if (node.labels.indexOf("Contract") !== -1) {
-                  node.labels = "Contract";
-              } else if (node.labels.indexOf("Block") !== -1) {
-                  node.labels = "Block";
-                  node.properties.blockNumber = node.properties.blockNumber.toString()
-              } else {
-                  node.labels = node.labels[0];
-              }
-              let convertedNode = {
-                  "id": node.identity.toString(),
-                  "index": node.identity.toString(),
-                  "label": node.labels,
-                  "properties": node.properties
-              };
-              addedAccounts.push(node.identity.toString());
-              convertedNodes.push(convertedNode);
-          }
-
-      }
-  }
-
-  return convertedNodes;
-};
-
+let convertNeo4jNode = function (neo4jNode) {
+    if (neo4jNode.labels.indexOf("External") !== -1) {
+        neo4jNode.labels = "External";
+    } else if (neo4jNode.labels.indexOf("Contract") !== -1) {
+        neo4jNode.labels = "Contract";
+    } else if (neo4jNode.labels.indexOf("Block") !== -1) {
+        neo4jNode.labels = "Block";
+        neo4jNode.properties.blockNumber = neo4jNode.properties.blockNumber.toString()
+    } else {
+        neo4jNode.labels = neo4jNode.labels[0];
+    }
+    return {
+        "id": neo4jNode.identity.toString(),
+        "index": neo4jNode.identity.toString(),
+        "label": neo4jNode.labels,
+        "properties": neo4jNode.properties
+    };
+}
 
 
 module.exports = new Neo4jAnalyzer();

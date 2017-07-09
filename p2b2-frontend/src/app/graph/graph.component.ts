@@ -30,19 +30,23 @@ export class GraphComponent implements OnInit, OnChanges {
 
   ngOnInit() {
 
-    this.ethereumAnalysisService.getDegreeCentrality("accounts").subscribe((res) => {
+
+  }
+
+  private getCentrality(context:string) {
+    d3.select("svg").remove();
+    this.ethereumAnalysisService.getDegreeCentrality(context).subscribe((res) => {
       this.accountDegreeCentrality = res;
       let accounts = [];
       res.forEach((account, index) => {
         accounts.push(account.address);
-      })
+      });
       this.ethereumAnalysisService.getGraphForAccounts(accounts).subscribe((result)=>{
-        console.log(result);
+        this.graphData = result;
+        this.createChart();
       })
     });
-    //this.createChart();
   }
-
 
   ngOnChanges() {
     /*   if (this.chart) {
@@ -59,7 +63,7 @@ export class GraphComponent implements OnInit, OnChanges {
 
     // force layout setup
     let force = (<any> d3).layout.force()
-      .charge(-200).linkDistance(30).size([this.width, this.height]);
+      .charge(-150).linkDistance(40).size([this.width, this.height]);
 
     // setup svg div
     let svg = d3.select(element).append("svg")
@@ -81,13 +85,14 @@ export class GraphComponent implements OnInit, OnChanges {
       .attr("class", function (d) {
         return "node " + (<any> d).label
       })
-      .attr("r", 10)
+      .attr("r", 8)
       .call(force.drag);
 
     // html title attribute for title node-attribute
     node.append("title")
       .text(function (d) {
-        return (<any> d).title;
+        let title = (<any> d).properties.address || (<any> d).properties.blockNumber;
+        return title;
       });
 
     // force feed algo ticks for coordinate computation

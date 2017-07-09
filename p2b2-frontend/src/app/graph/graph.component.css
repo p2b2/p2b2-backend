@@ -5,7 +5,23 @@
 
 /***********Start: Grid navigation***************/
 md-grid-tile {
-  background: lightblue;
+  border: 10px solid white;
+  text-align: center;
+  transition: all .2s ease-in-out;
+  cursor: pointer;
+  color: whitesmoke;
+}
+
+md-grid-tile:hover {
+  -ms-transform: scale(1.1, 1.1); /* IE 9 */
+  -webkit-transform: scale(1.1, 1.1); /* Safari */
+  transform: scale(1.1, 1.1);
+  z-index: 20;
+  border: none;
+}
+
+#navigator h2, #navigator h3 {
+  width: 100%;
 }
 /***********End: Grid navigation***************/
 
@@ -17,6 +33,7 @@ md-grid-tile {
   max-width: 100%;
   overflow: auto;
   margin-bottom: 2em;
+  margin-top: 2em;
 }
 
 #degree-table table {

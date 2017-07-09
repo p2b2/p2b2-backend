@@ -30,6 +30,7 @@ export class AccountInfoComponent implements OnInit, OnChanges {
   }
 
   getGraphForAccount(accountAddress:string) {
+    d3.select("svg").remove();
     this.ethereumAnalysisService.getAccountGraph(accountAddress).subscribe((res: Response) => {
       this.graphData = res.json();
 
