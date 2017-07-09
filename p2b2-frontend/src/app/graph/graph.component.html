@@ -1,1 +1,34 @@
-<div class="d3-chart" #chart></div>
+<h2 style="text-align: center">Graph Analysis</h2>
+
+<div class="p2b2-container">
+
+    <div id="navigator">
+      <md-grid-list cols="3" rowHeight="2:1">
+        <md-grid-tile>1</md-grid-tile>
+        <md-grid-tile>2</md-grid-tile>
+        <md-grid-tile>3</md-grid-tile>
+      </md-grid-list>
+    </div>
+
+    <div id="degree-table" *ngIf="accountDegreeCentrality.length > 0"  >
+      <h3>Degree Centrality (all accounts)</h3>
+      <table >
+        <tr>
+          <th></th>
+          <th>Account Address</th>
+          <th>Degree Score</th>
+        </tr>
+        <tr *ngFor="let accDegCen of accountDegreeCentrality">
+          <td>{{accDegCen.place}}</td>
+          <td>{{accDegCen.address}}</td>
+          <td>{{accDegCen.degreeScore}}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div>
+      <h3 >Graph</h3>
+      <div style="height: 65em;" class="d3-chart" #chart></div>
+    </div>
+
+</div>

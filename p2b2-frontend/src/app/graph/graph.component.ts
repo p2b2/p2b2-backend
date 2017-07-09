@@ -23,20 +23,26 @@ export class GraphComponent implements OnInit, OnChanges {
   private width: number;
   private height: number;
   private margin: any = {top: 20, bottom: 20, left: 20, right: 20};
-  private accountAddress: string;
+  private accountDegreeCentrality = [];
 
   constructor(private ethereumAnalysisService: EthereumAnalysisService) {
   }
 
   ngOnInit() {
-    this.createChart();
+
+    this.ethereumAnalysisService.getDegreeCentrality("accounts").subscribe((res) => {
+      this.accountDegreeCentrality = res;
+      let accounts = [];
+      res.forEach((account, index) => {
+        accounts.push(account.address);
+      })
+      this.ethereumAnalysisService.getGraphForAccounts(accounts).subscribe((result)=>{
+        console.log(result);
+      })
+    });
+    //this.createChart();
   }
 
-  getGraphForAccount(accountAddress:string) {
-    this.ethereumAnalysisService.getAccountGraph(accountAddress).subscribe((res: Response) => {
-      console.log(res.json());
-    });
-  }
 
   ngOnChanges() {
     /*   if (this.chart) {

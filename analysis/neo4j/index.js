@@ -140,38 +140,68 @@ Neo4jAnalyzer.prototype.getAccountBetweennessCentrality = () => {
 };
 
 /**
- * Computes a graph for a list of provided accounts. The links in the created graph are limited to 10 because of
+ * Computes a graph for a list of provided accounts. The links in the created graph are limited to 300 because of
  * computing power reasons.
  * @returns {Promise}
  */
 Neo4jAnalyzer.prototype.getGraphForAccounts = (accounts) => {
+    accounts = JSON.parse(accounts);
     return new Promise((resolve, reject) => {
+        /* Start: get for each address the node */
         let params = {};
         let query = 'MATCH (n:Account) ' +
             'WHERE n.address= $address ';
-        for (let i =0; i< accounts.length;i++) {
-            params["address"+i] = accounts[i];
-            if (i>0) query = query +' OR n.address= $address' + i;
+        params["address"] = accounts[0].toLowerCase();
+        for (let i =1; i< accounts.length;i++) {
+            params["address"+i] = accounts[i].toLowerCase();
+            query = query +' OR n.address= $address' + i;
         }
         query = query + ' RETURN n ';
+        let nodeResultPromise = session.run(query, params);
+        /* End: get for each address the node */
 
-        let resultPromise = session.run(query, params);
+        /* Start: get for each address 30 links */
+        let linkPromises = [];
+        for (let i =1; i< accounts.length;i++) {
+            let linksResultPromise = session.run(
+                'MATCH (:Account {address: $address})-[r]-() ' +
+                'RETURN r Limit 30',
+                {address: accounts[i].toLowerCase()}
+            );
+            linkPromises.push(linksResultPromise);
+        }
+        let linksResultPromise = new Promise((resolve, reject) => {
+            Promise.all(linkPromises).then(promisesResults => {
+                let result = {records: []};
+                promisesResults.forEach((promisesResult, index) => {
+                    promisesResult.records.forEach((record, recordIndex) => {
+                        result.records.push(record);
+                    })
 
-        Promise.all([resultPromise]).then(promisesResult => {
-            resolve(promisesResult[0]);
+                });
+                resolve(result);
+            }).catch(promisesError => {
+                reject(promisesError);
+            });
+        });
+        /* End: get for each address 30 links */
+
+        /* Start: Resolve as soon as we have the nodes and the links */
+        Promise.all([nodeResultPromise, linksResultPromise]).then(promisesResult => {
+            let graphData = convertGraph(promisesResult[0], promisesResult[1]);
+            resolve(graphData);
         }).catch(promisesError => {
             reject(promisesError);
         });
+        /* End: Resolve as soon as we have the nodes and the links */
     })
 };
 
 Neo4jAnalyzer.prototype.getGraphForAccount = (accountAddress) => {
     return new Promise((resolve, reject) => {
         let nodesResultPromise = session.run(
-            'MATCH (accountOne:Account) WHERE accountOne.address=$address ' +
-            'MATCH (neighbors) ' +
-            'WHERE (accountOne)-[]-(neighbors)' +
-            'RETURN accountOne, neighbors',
+            'MATCH (accountOne:Account {address: $address})-[r]-(neighbors)' +
+            'RETURN accountOne, neighbors, r LIMIT 100',
             // The query below would return nodes and edges in one, but is not performing enough
             /*  'MATCH (accountOne:Account) WHERE accountOne.address=$address ' +
             'MATCH (neighbors:Account) ' +
@@ -184,8 +214,8 @@ Neo4jAnalyzer.prototype.getGraphForAccount = (accountAddress) => {
 
         let linksResultPromise = session.run(
              'MATCH (:Account {address: $address})-[r]-() ' +
-             'RETURN r ',
-            // + 'LIMIT 500',
+             'RETURN r '+
+             'LIMIT 500',
             {address: accountAddress.toLowerCase()}
         );
 
@@ -258,13 +288,15 @@ let convertGraphLinks = function (neo4jLinkResponse) {
             }
         }
     }
-    console.log(convertedLinks);
+  //  console.log(convertedLinks);
     return convertedLinks;
 };
 
 let convertGraphNodes = function (neo4jNodeResponse) {
   let addedAccounts = [];
   let convertedNodes = [];
+  console.log(neo4jNodeResponse);
+    console.log(neo4jNodeResponse.records[0]._fields);
 
   for (let i=0; i < neo4jNodeResponse.records.length; i++) {
       let singleRecord = neo4jNodeResponse.records[i];

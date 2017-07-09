@@ -2,6 +2,7 @@
 
 var express = require('express')
 const winston = require('winston')
+var SHA256 = require("crypto-js/sha256");
 var anaMongoTotal = require('../analysis/mongodb/index.js')
 var anaMongo = anaMongoTotal.ana
 var anaNeo4J = require('../analysis/neo4j/index.js')
@@ -74,8 +75,8 @@ let bootstrap = function () {
             if(error){
                 res.send(error)
             } else {
-                if(!result){
-             //   if(!false){
+                // if(!result){
+                if(!false){
                     // TODO: if the cached record is bigger than a certain time threshold, get it new from Neo4j
                     anaNeo4J.getGraphForAccount(req.params.address).then(graph => {
                         let graphData = graph;
@@ -92,6 +93,32 @@ let bootstrap = function () {
         })
     });
 
+    // TODO implement a validate function
+    baseApp.get('/analytics/graph/accounts', (req, res) => {
+        let addresses =  req.query.addresses;
+        let addressGraph = "graph-" + SHA256(req.query.addresses);
+        client.get(addressGraph, (error, result) => {
+            if(error){
+                res.send(error)
+            } else {
+               // if(!result){
+                if(!false){
+                    // TODO: if the cached record is bigger than a certain time threshold, get it new from Neo4j
+                    anaNeo4J.getGraphForAccounts(addresses).then(graph => {
+                        let graphData = graph;
+                        client.set(addressGraph, JSON.stringify(graphData), redis.print);
+                        res.send(graphData);
+                    }).catch(err => {
+                        winston.log('error', 'P2B2backend - Could not fetch Graph for accounts', err);
+                        res.status(400).send('Something broke!');
+                    });
+                } else {
+                    res.send(result)
+                }
+            }
+        })
+    });
+
     baseApp.get('/graph/degreecentrality/:context', validateDegreeCentralityContext, (req, res) => {
         let context = req.params.context;
         let addressGraph = "graph-degreecentrality:"+context ;
@@ -99,7 +126,8 @@ let bootstrap = function () {
             if(error){
                 res.send(error)
             } else {
-                if(!result){
+                // if(!result){
+                if(!false){
                     // TODO: if the cached record is bigger than a certain time threshold, get it new from Neo4j
                     let centralityPromise = null;
                     if (context === "accounts") {
