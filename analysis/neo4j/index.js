@@ -52,6 +52,119 @@ Neo4jAnalyzer.prototype.disconnect = () => {
     driver.close();
 };
 
+/**
+ * Computes the 10 accounts with the highest degree centrality
+ * @returns {Promise}
+ */
+Neo4jAnalyzer.prototype.getAccountDegreeCentrality = () => {
+    return new Promise((resolve, reject) => {
+        let resultPromise = session.run(
+            'match (n:Account)-[r:Transaction]-(m:Account) ' +
+            'return n.address, count(r) as DegreeScore ' +
+            'order by DegreeScore desc ' +
+            'limit 10;'
+        );
+
+        Promise.all([resultPromise]).then(promisesResult => {
+            resolve(promisesResult[0]);
+        }).catch(promisesError => {
+            reject(promisesError);
+        });
+    })
+};
+
+/**
+ * Computes the 10 external accounts with the highest degree centrality
+ * @returns {Promise}
+ */
+Neo4jAnalyzer.prototype.getExternalDegreeCentrality = () => {
+    return new Promise((resolve, reject) => {
+        let resultPromise = session.run(
+            'match (n:Contract)-[r:Transaction]-(m:Account) ' +
+            'return n.address, count(r) as DegreeScore ' +
+            'order by DegreeScore desc ' +
+            'limit 10;'
+        );
+
+        Promise.all([resultPromise]).then(promisesResult => {
+            resolve(promisesResult[0]);
+        }).catch(promisesError => {
+            reject(promisesError);
+        });
+    })
+};
+
+/**
+ * Computes the 10 contracts with the highest degree centrality
+ * @returns {Promise}
+ */
+Neo4jAnalyzer.prototype.getContractDegreeCentrality = () => {
+    return new Promise((resolve, reject) => {
+        let resultPromise = session.run(
+            'match (n:External)-[r:Transaction]-(m:Account) ' +
+            'return n.address, count(r) as DegreeScore ' +
+            'order by DegreeScore desc ' +
+            'limit 10;'
+        );
+
+        Promise.all([resultPromise]).then(promisesResult => {
+            resolve(promisesResult[0]);
+        }).catch(promisesError => {
+            reject(promisesError);
+        });
+    })
+};
+
+
+/**
+ * Computes the 10 accounts with the highest betweenness centrality
+ * Only use on a machine with high memory resources
+ * @returns {Promise}
+ */
+Neo4jAnalyzer.prototype.getAccountBetweennessCentrality = () => {
+    return new Promise((resolve, reject) => {
+        let resultPromise = session.run(
+            'MATCH p=allShortestPaths((source:Account)-[:Transaction*]-(target:Account)) ' +
+            'WHERE id(source) < id(target) and length(p) > 1 ' +
+            'UNWIND nodes(p)[1..-1] as n ' +
+            'RETURN n.address, count(*) as betweenness ' +
+            'ORDER BY betweenness DESC'
+        );
+
+        Promise.all([resultPromise]).then(promisesResult => {
+            resolve(promisesResult[0]);
+        }).catch(promisesError => {
+            reject(promisesError);
+        });
+    })
+};
+
+/**
+ * Computes a graph for a list of provided accounts. The links in the created graph are limited to 10 because of
+ * computing power reasons.
+ * @returns {Promise}
+ */
+Neo4jAnalyzer.prototype.getGraphForAccounts = (accounts) => {
+    return new Promise((resolve, reject) => {
+        let params = {};
+        let query = 'MATCH (n:Account) ' +
+            'WHERE n.address= $address ';
+        for (let i =0; i< accounts.length;i++) {
+            params["address"+i] = accounts[i];
+            if (i>0) query = query +' OR n.address= $address' + i;
+        }
+        query = query + ' RETURN n ';
+
+        let resultPromise = session.run(query, params);
+
+        Promise.all([resultPromise]).then(promisesResult => {
+            resolve(promisesResult[0]);
+        }).catch(promisesError => {
+            reject(promisesError);
+        });
+    })
+};
+
 Neo4jAnalyzer.prototype.getGraphForAccount = (accountAddress) => {
     return new Promise((resolve, reject) => {
         let nodesResultPromise = session.run(
