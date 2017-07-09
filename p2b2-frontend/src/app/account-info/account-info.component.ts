@@ -30,7 +30,8 @@ export class AccountInfoComponent implements OnInit, OnChanges {
 
   }
 
-  getInfoForAccount(accountAddress:string) {
+  getGraphForAccount(accountAddress:string) {
+    d3.select("svg").remove();
     this.ethereumAnalysisService.getAccountGraph(accountAddress).subscribe((res: Response) => {
       this.graphData = res.json();
 
@@ -71,7 +72,7 @@ export class AccountInfoComponent implements OnInit, OnChanges {
 
     // force layout setup
     let force = (<any> d3).layout.force()
-      .charge(-200).linkDistance(30).size([this.width, this.height]);
+      .charge(-1000).linkDistance(100).size([this.width, this.height]);
 
     // setup svg div
     let svg = d3.select(element).append("svg")
@@ -93,7 +94,7 @@ export class AccountInfoComponent implements OnInit, OnChanges {
       .attr("class", function (d) {
         return "node " + (<any> d).label
       })
-      .attr("r", 10)
+      .attr("r", 20)
       .call(force.drag);
 
     // html title attribute for title node-attribute

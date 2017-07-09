@@ -2,6 +2,7 @@
 
 var express = require('express')
 const winston = require('winston')
+var SHA256 = require("crypto-js/sha256");
 var anaMongoTotal = require('../analysis/mongodb/index.js')
 var anaMongo = anaMongoTotal.ana
 var anaNeo4J = require('../analysis/neo4j/index.js')
@@ -30,6 +31,16 @@ let validateAddress = (req, res, next) => {
     }
 }
 
+
+let validateDegreeCentralityContext = (req, res, next) => {
+    let context = req.params.context || "";
+    if(context !== "accounts" && context !== "external" && context !== "contracts" ){
+        res.status(400).send(req.params.context + " is not a valid context for the degree centrality. Must be either 'accounts', 'external' or 'contracts'")
+    } else {
+        next()
+    }
+}
+
 let bootstrap = function () {
     let baseApp = express()
 
@@ -55,6 +66,9 @@ let bootstrap = function () {
         })
     });
 
+    /***************************************
+     * Start: Graph DB requests
+     ***************************************/
     baseApp.get('/graph/:address', validateAddress, (req, res) => {
         let addressGraph = "graph-" + req.params.address ;
         client.get(addressGraph, (error, result) => {
@@ -62,7 +76,7 @@ let bootstrap = function () {
                 res.send(error)
             } else {
                 if(!result){
-             //   if(!false){
+                    //if(!false){
                     // TODO: if the cached record is bigger than a certain time threshold, get it new from Neo4j
                     anaNeo4J.getGraphForAccount(req.params.address).then(graph => {
                         let graphData = graph;
@@ -75,10 +89,72 @@ let bootstrap = function () {
                 } else {
                     res.send(result)
                 }
-
             }
         })
     });
+
+    // TODO implement a validate function
+    baseApp.get('/analytics/graph/accounts', (req, res) => {
+        let addresses =  req.query.addresses;
+        let addressGraph = "graph-" + SHA256(req.query.addresses);
+        client.get(addressGraph, (error, result) => {
+            if(error){
+                res.send(error)
+            } else {
+                if(!result){
+               // if(!false){
+                    // TODO: if the cached record is bigger than a certain time threshold, get it new from Neo4j
+                    anaNeo4J.getGraphForAccounts(addresses).then(graph => {
+                        let graphData = graph;
+                        client.set(addressGraph, JSON.stringify(graphData), redis.print);
+                        res.send(graphData);
+                    }).catch(err => {
+                        winston.log('error', 'P2B2backend - Could not fetch Graph for accounts', err);
+                        res.status(400).send('Something broke!');
+                    });
+                } else {
+                    res.send(result)
+                }
+            }
+        })
+    });
+
+    baseApp.get('/graph/degreecentrality/:context', validateDegreeCentralityContext, (req, res) => {
+        let context = req.params.context;
+        let addressGraph = "graph-degreecentrality:"+context ;
+        client.get(addressGraph, (error, result) => {
+            if(error){
+                res.send(error)
+            } else {
+                 if(!result){
+                //if(!false){
+                    // TODO: if the cached record is bigger than a certain time threshold, get it new from Neo4j
+                    let centralityPromise = null;
+                    if (context === "accounts") {
+                        centralityPromise = anaNeo4J.getAccountDegreeCentrality();
+                    } else if (context === "external") {
+                        centralityPromise = anaNeo4J.getExternalDegreeCentrality();
+                    } else if (context === "contracts") {
+                        centralityPromise = anaNeo4J.getContractDegreeCentrality();
+                    }
+
+                    centralityPromise.then(degreeCentralityResult => {
+                        client.set(addressGraph, JSON.stringify(degreeCentralityResult), redis.print);
+                        res.send(degreeCentralityResult);
+                    }).catch(err => {
+                        winston.log('error', 'P2B2backend - Could not fetch Graph degree centrality', err);
+                        res.status(400).send('Something broke!');
+                    });
+                } else {
+                    res.send(result)
+                }
+            }
+        })
+    });
+
+    /***************************************
+     * End: Graph DB requests
+     ***************************************/
 
     baseApp.put('/totalValue', (req, res) => {
         anaMongo.runAnalysis(anaMongoTotal.jobs[1]).then(result => {
