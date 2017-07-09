@@ -54,9 +54,9 @@ Neo4jAnalyzer.prototype.disconnect = () => {
 
 Neo4jAnalyzer.prototype.getGraphForAccount = (accountAddress) => {
     return new Promise((resolve, reject) => {
-        const resultPromise = session.run(
+        let nodesResultPromise = session.run(
             'MATCH (accountOne:Account) WHERE accountOne.address=$address ' +
-            'MATCH (neighbors:Account) ' +
+            'MATCH (neighbors) ' +
             'WHERE (accountOne)-[]-(neighbors)' +
             'RETURN accountOne, neighbors',
             // The query below would return nodes and edges in one, but is not performing enough
@@ -69,24 +69,83 @@ Neo4jAnalyzer.prototype.getGraphForAccount = (accountAddress) => {
             {address: accountAddress.toLowerCase()}
         );
 
-        resultPromise.then(result => {
-            let graphData = convertGraph(result);
+        let linksResultPromise = session.run(
+             'MATCH (:Account {address: $address})-[r]-() ' +
+             'RETURN r ',
+            // + 'LIMIT 500',
+            {address: accountAddress.toLowerCase()}
+        );
+
+        Promise.all([linksResultPromise, nodesResultPromise]).then(promisesResult => {
+            let graphData = convertGraph(promisesResult[1], promisesResult[0]);
             resolve(graphData);
-        }).catch(error => reject(error));
+        }).catch(promisesError => {
+            reject(promisesError);
+        });
     })
 };
 
 let convertGraph = function (neo4jNodeResponse, neo4jLinkResponse) {
+    let convertedGraphNodes =  convertGraphNodes(neo4jNodeResponse);
+    let convertedGraphLinks =  convertGraphLinks(neo4jLinkResponse);
+
+    for (let i = 0; i < convertedGraphLinks.length; i++) {
+        for (let j = 0; j< convertedGraphNodes.length; j++) {
+            if (convertedGraphLinks[i].source === convertedGraphNodes[j].id) convertedGraphLinks[i].source = j;
+            if (convertedGraphLinks[i].target === convertedGraphNodes[j].id) convertedGraphLinks[i].target = j;
+        }
+    }
+
     return {
-        "nodes": convertGraphNodes(neo4jNodeResponse),
-        "links": convertGraphLinks(neo4jLinkResponse)
+        "nodes": convertedGraphNodes,
+        "links": convertedGraphLinks
     };
 };
 
 let convertGraphLinks = function (neo4jLinkResponse) {
     let addedLinks = [];
     let convertedLinks = [];
-    // TODO
+
+    for (let i=0; i < neo4jLinkResponse.records.length; i++) {
+        let singleRecord = neo4jLinkResponse.records[i];
+        for (let j = 0; j < singleRecord.length; j++) {
+            let link =  singleRecord.get(j);
+            if (addedLinks.indexOf(link.identity.toString()) === -1) {
+                let convertedLink = null;
+                if (link.type === "Transaction") {
+                    link.properties = {
+                        input: link.properties.input,
+                        blockNumber: link.properties.blockNumber.toString(),
+                        gas: link.properties.gas.toString(),
+                        from: link.properties.from,
+                        transactionIndex: link.properties.transactionIndex.toString(),
+                        to: link.properties.to,
+                        value: link.properties.value.toString(),
+                        gasPrice: link.properties.gasPrice.toString()
+                    };
+                    convertedLink = {
+                        "id": link.identity.toString(),
+                        "source": link.start.toString(),
+                        "target": link.end.toString(),
+                        "type": link.type,
+                        "properties": link.properties
+                    };
+                } else if (link.type === "Mined") {
+                    convertedLink = {
+                        "id": link.identity.toString(),
+                        "source": link.start.toString(),
+                        "target": link.end.toString(),
+                        "type": link.type
+                    };
+                }
+                if (convertedLink!== null) {
+                    addedLinks.push(link.identity.toString());
+                    convertedLinks.push(convertedLink);
+                }
+            }
+        }
+    }
+    console.log(convertedLinks);
     return convertedLinks;
 };
 
@@ -104,11 +163,15 @@ let convertGraphNodes = function (neo4jNodeResponse) {
                   node.labels = "External";
               } else if (node.labels.indexOf("Contract") !== -1) {
                   node.labels = "Contract";
+              } else if (node.labels.indexOf("Block") !== -1) {
+                  node.labels = "Block";
+                  node.properties.blockNumber = node.properties.blockNumber.toString()
               } else {
                   node.labels = node.labels[0];
               }
               let convertedNode = {
                   "id": node.identity.toString(),
+                  "index": node.identity.toString(),
                   "label": node.labels,
                   "properties": node.properties
               };
