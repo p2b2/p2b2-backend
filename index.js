@@ -3,9 +3,9 @@
 var express = require('express')
 const winston = require('winston')
 var SHA256 = require("crypto-js/sha256");
-var anaMongoTotal = require('../analysis/mongodb/index.js')
+var anaMongoTotal = require('p2b2-analysis-mongodb')
 var anaMongo = anaMongoTotal.ana
-var anaNeo4J = require('../analysis/neo4j/index.js')
+var anaNeo4J = require('p2b2-analysis-neo4j')
 var Web3 = require('web3')
 var web3 = new Web3()
 const redis = require('redis')
