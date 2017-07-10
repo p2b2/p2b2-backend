@@ -20,26 +20,23 @@ export class RankingComponent implements OnInit {
 
   private getTopRevenue(){
       this.eas.getTopRevenueSent(3).subscribe((result) => {
-          let topAccounts = result.json();
-          for (var i = 0; i < topAccounts.length; ++i) {
-            topAccounts[i].rank = i+1
-          }
-          this.topRevenueSent = topAccounts
+          this.topRevenueSent = this.prepareResult(result);
       })
       this.eas.getTopRevenueReceived(3).subscribe((result) => {
-          let topAccounts = result.json();
-          for (var i = 0; i < topAccounts.length; ++i) {
-            topAccounts[i].rank = i+1
-          }
-          this.topRevenueReceived = topAccounts
+          this.topRevenueReceived = this.prepareResult(result);
       })
       this.eas.getTopGasRevenue(3).subscribe((result) => {
-          let topAccounts = result.json();
-          for (var i = 0; i < topAccounts.length; ++i) {
-            topAccounts[i].rank = i+1
-          }
-          this.topGasRevenue = topAccounts
+          this.topGasRevenue = this.prepareResult(result);
       })
+  }
+
+  private prepareResult(result){
+    let res = result.json();
+    for (var i = 0; i < res.length; ++i) {
+      res[i].rank = i+1
+      res[i].value = parseFloat(res[i].value).toFixed(7)
+    }
+    return res;
   }
 
 }
